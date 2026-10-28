@@ -11,8 +11,9 @@
     "start": "electron-vite preview",
     "build": "electron-vite build",
     "postinstall": "electron-builder install-app-deps",
-    "build:win": "npm run build && WINEPREFIX=$HOME/.wine32 electron-builder --win",
-    "build:win:portable": "npm run build && WINEPREFIX=$HOME/.wine32 electron-builder --win portable",
+    "build:win": "npm run version:bump && npm run build && WINEPREFIX=$HOME/.wine32 electron-builder --win",
+    "build:win:portable": "npm run version:bump && npm run build && WINEPREFIX=$HOME/.wine32 electron-builder --win portable",
+    "version:bump": "npm version patch --no-git-tag-version",
     "build:dir": "npm run build && electron-builder --dir"
   },
   "dependencies": {
