@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(/**)",
+      "Write(/home/desarrollo/Documentos/PROYECTOS/Planta-de-Hielo/planta-hielo/**)",
+      "exec",
+      "edit",
+      "read",
+      "grep",
+      "glob",
+      "Fetch(https://*)",
+      "Fetch(http://*)",
+      "mcp__*"
+    ]
+  }
+}

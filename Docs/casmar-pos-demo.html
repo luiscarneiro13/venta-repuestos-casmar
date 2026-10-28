@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Casmar POS — Demostración</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#EEF3F6;
+    --surface:#FFFFFF;
+    --surface-alt:#F6F9FA;
+    --primary:#0F5C78;
+    --primary-dark:#0A4155;
+    --primary-light:#E4EEF2;
+    --accent:#E8912B;
+    --accent-light:#FBEBD4;
+    --success:#2E7D53;
+    --success-light:#E3F1E9;
+    --danger:#B23A2E;
+    --danger-light:#F9E4E1;
+    --text-primary:#1C2933;
+    --text-secondary:#5C6B77;
+    --text-muted:#93A3AD;
+    --border:#DCE4E9;
+    --radius:8px;
+    --font: 'Inter', -apple-system, sans-serif;
+    --mono: 'IBM Plex Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:var(--font);
+    background:var(--bg);
+    color:var(--text-primary);
+    font-size:14px;
+    line-height:1.5;
+  }
+  button{font-family:inherit;cursor:pointer;}
+  input,select{font-family:inherit;font-size:14px;}
+
+  /* ---------- utility ---------- */
+  .hidden{display:none !important;}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums;}
+  .muted{color:var(--text-secondary);}
+  .tag{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:100px;font-size:12px;font-weight:600;}
+  .tag-contado{background:var(--success-light);color:var(--success);}
+  .tag-credito{background:var(--accent-light);color:#8A5A15;}
+  .tag-pendiente{background:var(--accent-light);color:#8A5A15;}
+  .tag-parcial{background:var(--primary-light);color:var(--primary-dark);}
+  .tag-pagado{background:var(--success-light);color:var(--success);}
+  .tag-vencido{background:var(--danger-light);color:var(--danger);}
+  .tag-anulada{background:#EFEFEF;color:#7A7A7A;}
+  .tag-activa{background:var(--success-light);color:var(--success);}
+  .btn{border:none;border-radius:var(--radius);padding:9px 16px;font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;gap:6px;transition:background .15s;}
+  .btn-primary{background:var(--primary);color:#fff;}
+  .btn-primary:hover{background:var(--primary-dark);}
+  .btn-primary:disabled{background:#B9C6CC;cursor:not-allowed;}
+  .btn-outline{background:var(--surface);color:var(--text-primary);border:1px solid var(--border);}
+  .btn-outline:hover{border-color:var(--primary);color:var(--primary);}
+  .btn-ghost{background:transparent;color:var(--text-secondary);padding:6px 10px;}
+  .btn-ghost:hover{color:var(--primary);}
+  .btn-danger-ghost{background:transparent;color:var(--danger);padding:6px 10px;font-weight:600;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;}
+  .field-label{font-size:12.5px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;display:block;}
+  .input{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text-primary);}
+  .input:focus{outline:none;border-color:var(--primary);}
+  table{width:100%;border-collapse:collapse;}
+  th{text-align:left;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.03em;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface-alt);}
+  td{padding:12px 14px;border-bottom:1px solid var(--border);font-size:13.5px;}
+  tr:last-child td{border-bottom:none;}
+
+  /* ---------- demo banner ---------- */
+  .demo-banner{background:var(--primary-dark);color:#fff;text-align:center;font-size:12.5px;font-weight:500;padding:6px;letter-spacing:.02em;}
+
+  /* ---------- login overlay ---------- */
+  #login-overlay{
+    position:fixed;inset:0;background:linear-gradient(160deg,#0A4155,#0F5C78 60%);
+    display:flex;align-items:center;justify-content:center;z-index:100;
+  }
+  .login-box{width:380px;background:var(--surface);border-radius:14px;padding:34px 32px;box-shadow:0 20px 50px rgba(0,0,0,.25);}
+  .login-logo{display:flex;align-items:center;gap:10px;margin-bottom:22px;}
+  .login-logo .mark{width:38px;height:38px;border-radius:9px;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:16px;}
+  .login-logo .name{font-weight:700;font-size:17px;}
+  .login-logo .sub{font-size:11.5px;color:var(--text-secondary);margin-top:-2px;}
+  .login-box h2{font-size:15px;margin:0 0 4px;}
+  .login-box p.desc{font-size:12.5px;color:var(--text-secondary);margin:0 0 18px;}
+  .login-field{margin-bottom:16px;}
+  .tasa-row{display:flex;align-items:center;gap:8px;background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;}
+  .tasa-row .prefix{font-size:12.5px;color:var(--text-secondary);white-space:nowrap;}
+  .tasa-row input{border:none;background:transparent;font-family:var(--mono);font-size:16px;font-weight:600;width:100%;padding:0;}
+  .tasa-row input:focus{outline:none;}
+  .tasa-hint{font-size:11.5px;color:var(--text-muted);margin-top:6px;}
+  .login-box .btn-primary{width:100%;justify-content:center;padding:11px;font-size:14px;margin-top:6px;}
+
+  /* ---------- app shell ---------- */
+  #app{display:none;}
+  .topbar{
+    height:58px;background:var(--surface);border-bottom:1px solid var(--border);
+    display:flex;align-items:center;justify-content:space-between;padding:0 22px;
+  }
+  .topbar .brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px;}
+  .topbar .brand .mark{width:28px;height:28px;border-radius:7px;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;}
+  .topbar-right{display:flex;align-items:center;gap:18px;}
+  .tasa-chip{display:flex;align-items:center;gap:8px;background:var(--primary-light);border-radius:100px;padding:6px 8px 6px 14px;}
+  .tasa-chip .lbl{font-size:11.5px;color:var(--primary-dark);font-weight:600;}
+  .tasa-chip .val{font-family:var(--mono);font-weight:600;font-size:13.5px;color:var(--primary-dark);}
+  .tasa-chip button{background:var(--surface);border:none;border-radius:100px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;color:var(--primary-dark);}
+  .user-chip{display:flex;align-items:center;gap:8px;}
+  .user-chip .avatar{width:30px;height:30px;border-radius:100px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12.5px;}
+  .user-chip .info .name{font-size:13px;font-weight:600;line-height:1.2;}
+  .user-chip .info .role{font-size:11px;color:var(--text-secondary);}
+  .logout-btn{color:var(--text-muted);}
+  .logout-btn:hover{color:var(--danger);}
+
+  .layout{display:flex;height:calc(100vh - 58px - 27px);}
+  .sidebar{width:212px;background:var(--surface);border-right:1px solid var(--border);padding:16px 10px;flex-shrink:0;transition:width .18s ease;position:relative;}
+  .sidebar.collapsed{width:60px;}
+  .sidebar-toggle{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius);padding:8px;color:var(--text-secondary);margin-bottom:12px;}
+  .sidebar-toggle:hover{color:var(--primary);border-color:var(--primary);}
+  .sidebar-toggle svg{flex-shrink:0;transition:transform .18s ease;}
+  .sidebar.collapsed .sidebar-toggle svg{transform:rotate(180deg);}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius);color:var(--text-secondary);font-size:13.5px;font-weight:500;margin-bottom:2px;white-space:nowrap;overflow:hidden;}
+  .nav-item svg{flex-shrink:0;}
+  .nav-item:hover{background:var(--surface-alt);color:var(--text-primary);}
+  .nav-item.active{background:var(--primary-light);color:var(--primary-dark);font-weight:600;}
+  .sidebar.collapsed .nav-item{justify-content:center;padding:10px;}
+  .sidebar.collapsed .nav-item .label{display:none;}
+  .sidebar.collapsed .nav-item{position:relative;}
+  .sidebar.collapsed .nav-item:hover::after{
+    content:attr(data-label);position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);
+    background:var(--primary-dark);color:#fff;padding:5px 10px;border-radius:6px;font-size:12px;font-weight:500;
+    white-space:nowrap;z-index:50;box-shadow:0 4px 10px rgba(0,0,0,.15);
+  }
+  .content{flex:1;overflow-y:auto;padding:24px 28px;}
+  .view{display:none;}
+  .view.active{display:block;}
+  .view-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+  .view-header h1{font-size:19px;margin:0;}
+  .view-header p{font-size:13px;color:var(--text-secondary);margin:3px 0 0;}
+
+  /* ---------- Nueva venta ---------- */
+  .venta-layout{display:grid;grid-template-columns:repeat(12,1fr);gap:20px;align-items:flex-start;}
+  .venta-ticket-col{grid-column:span 6;min-width:0;}
+  .venta-precios-col{grid-column:span 6;min-width:0;}
+  .cat-tabs{display:flex;gap:6px;margin-bottom:16px;}
+  .cat-tab{padding:8px 16px;border-radius:100px;border:1px solid var(--border);background:var(--surface);font-size:13px;font-weight:600;color:var(--text-secondary);}
+  .cat-tab.active{background:var(--primary);border-color:var(--primary);color:#fff;}
+  .price-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;}
+  .price-card{padding:14px;text-align:left;}
+  .price-card .code{font-size:11.5px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.03em;}
+  .price-card .amounts{display:flex;align-items:baseline;gap:7px;margin:6px 0 8px;}
+  .price-card .usd{font-family:var(--mono);font-size:19px;font-weight:600;}
+  .price-card .bs{font-family:var(--mono);font-size:12px;color:var(--text-secondary);}
+  .price-card .desc{font-size:11.5px;color:var(--text-secondary);line-height:1.4;min-height:32px;}
+  .price-card:hover{border-color:var(--primary);}
+  .price-card.selected{border-color:var(--primary);background:var(--primary-light);}
+
+  .cart-panel{padding:16px;position:sticky;top:0;}
+  .cart-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .cart-title h3{font-size:14.5px;margin:0;}
+  .cart-empty{text-align:center;padding:28px 10px;color:var(--text-muted);font-size:13px;}
+  .cart-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);}
+  .cart-item .info{flex:1;min-width:0;}
+  .cart-item .info .name{font-size:12.5px;font-weight:600;}
+  .cart-item .info .price{font-size:11.5px;color:var(--text-secondary);font-family:var(--mono);}
+  .qty-stepper{display:flex;align-items:center;gap:6px;}
+  .qty-stepper button{width:22px;height:22px;border:1px solid var(--border);background:var(--surface);border-radius:5px;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;color:var(--text-secondary);}
+  .qty-stepper span{width:20px;text-align:center;font-size:13px;font-weight:600;font-family:var(--mono);}
+  .qty-input{width:38px;text-align:center;border:1px solid var(--border);border-radius:5px;padding:3px 2px;font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text-primary);}
+  .qty-input:focus{outline:none;border-color:var(--primary);}
+  .cart-item .remove{color:var(--text-muted);font-size:16px;padding:2px 4px;}
+  .cart-item .remove:hover{color:var(--danger);}
+  .cart-totals{padding-top:12px;font-size:13px;}
+  .cart-totals .row{display:flex;justify-content:space-between;padding:4px 0;}
+  .cart-totals .row.total{font-weight:700;font-size:16px;padding-top:8px;margin-top:4px;border-top:1px solid var(--border);}
+  .cart-totals .row.total .num{font-family:var(--mono);}
+  .segmented{display:flex;background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius);padding:3px;margin-top:14px;}
+  .segmented button{flex:1;border:none;background:transparent;padding:8px;border-radius:6px;font-size:12.5px;font-weight:600;color:var(--text-secondary);}
+  .segmented button.active{background:var(--surface);color:var(--primary-dark);box-shadow:0 1px 2px rgba(0,0,0,.08);}
+  .warning-box{background:var(--danger-light);color:var(--danger);border-radius:var(--radius);padding:10px 12px;font-size:12px;margin-top:12px;line-height:1.4;}
+  .finalizar-btn{width:100%;justify-content:center;padding:12px;font-size:14px;margin-top:16px;}
+  .combobox{position:relative;}
+  .combobox-dropdown{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 10px 24px rgba(0,0,0,.14);max-height:230px;overflow-y:auto;z-index:30;}
+  .combobox-item{padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);}
+  .combobox-item:last-child{border-bottom:none;}
+  .combobox-item:hover{background:var(--surface-alt);}
+  .combobox-item .doc{font-size:11.5px;color:var(--text-secondary);margin-top:1px;}
+  .combobox-item.action{color:var(--primary);font-weight:600;}
+
+  /* ---------- tables view (historial, clientes, creditos) ---------- */
+  .toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:12px;flex-wrap:wrap;}
+  .filters{display:flex;gap:8px;flex-wrap:wrap;}
+  .filters select, .filters input{padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);font-size:13px;}
+
+  /* ---------- cierre de caja ---------- */
+  .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;}
+  .kpi-card{padding:16px;}
+  .kpi-card .lbl{font-size:12px;color:var(--text-secondary);font-weight:600;}
+  .kpi-card .val{font-family:var(--mono);font-size:22px;font-weight:600;margin-top:6px;}
+  .kpi-card .sub{font-size:11.5px;color:var(--text-muted);margin-top:2px;}
+
+  /* ---------- precios config ---------- */
+  .price-group{margin-bottom:22px;}
+  .price-group h3{font-size:13.5px;margin:0 0 10px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.03em;}
+  .edit-price-input{width:80px;padding:5px 7px;font-family:var(--mono);}
+
+  /* ---------- modal ---------- */
+  .modal-overlay{position:fixed;inset:0;background:rgba(15,25,32,.45);display:flex;align-items:center;justify-content:center;z-index:200;}
+  .modal-box{background:var(--surface);border-radius:12px;width:420px;max-width:90vw;max-height:86vh;overflow-y:auto;padding:24px;}
+  .modal-box.wide{width:520px;}
+  .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+  .modal-header h3{margin:0;font-size:15.5px;}
+  .modal-header button{background:transparent;border:none;font-size:18px;color:var(--text-muted);padding:2px 6px;}
+  .modal-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;}
+
+  /* ---------- ticket ---------- */
+  .ticket{font-family:var(--mono);font-size:12.5px;background:#fff;border:1px dashed var(--border);border-radius:8px;padding:18px 16px;}
+  .ticket .center{text-align:center;}
+  .ticket hr{border:none;border-top:1px dashed var(--border);margin:10px 0;}
+  .ticket .line{display:flex;justify-content:space-between;margin:3px 0;}
+  .ticket .brand{font-weight:600;font-size:14px;}
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN / TASA OVERLAY ================= -->
+<div id="login-overlay">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="mark">CH</div>
+      <div>
+        <div class="name">Casmar · Planta de Hielo</div>
+        <div class="sub">Sistema de ventas</div>
+      </div>
+    </div>
+    <h2>Iniciar sesión</h2>
+    <p class="desc">Confirma o actualiza la tasa del día para comenzar a vender.</p>
+
+    <div class="login-field">
+      <label class="field-label">Usuario</label>
+      <select class="input" id="login-usuario">
+        <option>Carlos Pérez — Administrador</option>
+        <option>Alejandro Rondón — Administrador</option>
+        <option>María Gómez — Cajera</option>
+      </select>
+    </div>
+    <div class="login-field">
+      <label class="field-label">Contraseña</label>
+      <input class="input" type="password" id="login-password" value="••••••••">
+    </div>
+    <div class="login-field">
+      <label class="field-label">Tasa del dólar de hoy</label>
+      <div class="tasa-row">
+        <span class="prefix">1 USD =</span>
+        <input type="number" step="0.01" id="login-tasa" value="187.32">
+        <span class="prefix">Bs</span>
+      </div>
+      <div class="tasa-hint">Última tasa cargada: 187.32 Bs — puedes editarla antes de continuar.</div>
+    </div>
+    <button class="btn btn-primary" onclick="iniciarSesion()">Ingresar al sistema</button>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="app">
+  <div class="demo-banner">Simulación con datos ficticios — para revisión de la propuesta con el cliente</div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="mark">CH</div>
+      Casmar POS
+    </div>
+    <div class="topbar-right">
+      <div class="tasa-chip">
+        <span class="lbl">Tasa</span>
+        <span class="val num" id="topbar-tasa">187.32 Bs</span>
+        <button title="Actualizar tasa" onclick="abrirModalTasa()">✎</button>
+      </div>
+      <div class="user-chip">
+        <div class="avatar">CP</div>
+        <div class="info">
+          <div class="name">Carlos Pérez</div>
+          <div class="role">Administrador</div>
+        </div>
+      </div>
+      <button class="btn-ghost logout-btn" title="Cerrar sesión" onclick="cerrarSesion()">Salir</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="sidebar collapsed" id="sidebar">
+      <button class="sidebar-toggle" onclick="toggleSidebar()" title="Colapsar menú" aria-label="Colapsar menú">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="nav-item active" data-view="venta" data-label="Nueva venta" onclick="irAVista('venta')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h2l2.4 12.2a2 2 0 0 0 2 1.6h8.6a2 2 0 0 0 2-1.6L21 7H6"/></svg>
+        <span class="label">Nueva venta</span>
+      </div>
+      <div class="nav-item" data-view="historial" data-label="Historial de ventas" onclick="irAVista('historial')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+        <span class="label">Historial de ventas</span>
+      </div>
+      <div class="nav-item" data-view="clientes" data-label="Clientes" onclick="irAVista('clientes')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 19c.6-3.4 3.3-5.4 6.5-5.4s5.9 2 6.5 5.4"/><circle cx="17.5" cy="8.5" r="2.3"/><path d="M16 13.6c2.5.3 4.4 2.1 4.9 4.9"/></svg>
+        <span class="label">Clientes</span>
+      </div>
+      <div class="nav-item" data-view="creditos" data-label="Créditos" onclick="irAVista('creditos')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2.5" y="5.5" width="19" height="13" rx="2"/><path d="M2.5 10h19"/></svg>
+        <span class="label">Créditos</span>
+      </div>
+      <div class="nav-item" data-view="inventario" data-label="Inventario" onclick="irAVista('inventario')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 8l9-5 9 5-9 5-9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>
+        <span class="label">Inventario</span>
+      </div>
+      <div class="nav-item" data-view="cierre" data-label="Cierre de caja" onclick="irAVista('cierre')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 14h3"/></svg>
+        <span class="label">Cierre de caja</span>
+      </div>
+      <div class="nav-item" data-view="precios" data-label="Precios" onclick="irAVista('precios')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l8 8-9 9-8-8V4h8z"/><circle cx="8" cy="8" r="1.4" fill="currentColor" stroke="none"/></svg>
+        <span class="label">Precios</span>
+      </div>
+    </nav>
+
+    <main class="content">
+
+      <!-- ===== NUEVA VENTA ===== -->
+      <section class="view active" id="view-venta">
+        <div class="view-header">
+          <div>
+            <h1>Nueva venta</h1>
+            <p>Selecciona los precios que aplican a este despacho.</p>
+          </div>
+        </div>
+        <div class="venta-layout">
+          <div class="venta-ticket-col">
+            <div class="card cart-panel">
+              <div class="cart-title">
+                <h3>Ticket actual</h3>
+                <span class="muted" id="cart-count" style="font-size:12px;">0 líneas</span>
+              </div>
+              <div id="cart-items"><div class="cart-empty">Aún no has agregado precios al ticket</div></div>
+
+              <div class="cart-totals">
+                <div class="row"><span>Subtotal</span><span class="num" id="tot-subtotal">$0.00</span></div>
+                <div class="row total"><span>Total</span><span><span class="num" id="tot-usd">$0.00</span> <span class="muted num" style="font-size:12px;" id="tot-bs">(0.00 Bs)</span></span></div>
+              </div>
+
+              <div class="login-field" style="margin-top:14px;">
+                <label class="field-label">Cliente (opcional)</label>
+                <div class="combobox">
+                  <input type="text" class="input" id="cliente-input" placeholder="Buscar por nombre, documento o teléfono…"
+                    autocomplete="off" oninput="onClienteInput()" onfocus="onClienteFocus()" onblur="onClienteBlur()">
+                  <div class="combobox-dropdown hidden" id="cliente-dropdown"></div>
+                </div>
+              </div>
+
+              <label class="field-label" style="margin-top:12px;">Tipo de pago</label>
+              <div class="segmented">
+                <button class="active" id="btn-contado" onclick="setTipoPago('contado')">Contado</button>
+                <button id="btn-credito" onclick="setTipoPago('credito')">Crédito</button>
+              </div>
+
+              <div class="warning-box hidden" id="warning-deuda">
+                Este cliente tiene un crédito vencido pendiente. No se puede montar un nuevo despacho a crédito sobre una deuda existente.
+              </div>
+
+              <button class="btn btn-primary finalizar-btn" id="btn-finalizar" onclick="finalizarVenta()" disabled>Finalizar venta</button>
+            </div>
+          </div>
+          <div class="venta-precios-col">
+            <div class="cat-tabs" id="cat-tabs"></div>
+            <div class="muted" id="venta-stock-info" style="font-size:12px;margin:-8px 0 12px;"></div>
+            <div class="price-grid" id="price-grid"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== HISTORIAL ===== -->
+      <section class="view" id="view-historial">
+        <div class="view-header">
+          <div>
+            <h1>Historial de ventas</h1>
+            <p>Consulta las ventas registradas, de contado y a crédito.</p>
+          </div>
+        </div>
+        <div class="toolbar">
+          <div class="filters">
+            <select id="filtro-tipo-pago" onchange="renderHistorial()">
+              <option value="todos">Todos los tipos de pago</option>
+              <option value="contado">Contado</option>
+              <option value="credito">Crédito</option>
+            </select>
+            <input type="text" id="filtro-busqueda" placeholder="Buscar por cliente o ticket…" oninput="renderHistorial()">
+          </div>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr>
+              <th>Ticket</th><th>Fecha</th><th>Cliente</th><th>Tipo de pago</th>
+              <th>Total USD</th><th>Total Bs</th><th>Tasa usada</th><th>Estado</th>
+            </tr></thead>
+            <tbody id="historial-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== CLIENTES ===== -->
+      <section class="view" id="view-clientes">
+        <div class="view-header">
+          <div>
+            <h1>Clientes</h1>
+            <p>Registro de negocios y personas atendidas en la planta.</p>
+          </div>
+          <button class="btn btn-primary" onclick="abrirModalCliente()">+ Nuevo cliente</button>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr>
+              <th>Nombre</th><th>Documento</th><th>Teléfono</th><th>Días de crédito</th><th>Estado</th><th></th>
+            </tr></thead>
+            <tbody id="clientes-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== CREDITOS ===== -->
+      <section class="view" id="view-creditos">
+        <div class="view-header">
+          <div>
+            <h1>Créditos</h1>
+            <p>Cuentas por cobrar de ventas realizadas a crédito.</p>
+          </div>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr>
+              <th>Cliente</th><th>Ticket</th><th>Monto total</th><th>Pagado</th><th>Saldo</th>
+              <th>Vencimiento</th><th>Estado</th><th></th>
+            </tr></thead>
+            <tbody id="creditos-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== INVENTARIO ===== -->
+      <section class="view" id="view-inventario">
+        <div class="view-header">
+          <div>
+            <h1>Inventario de bolsas de hielo</h1>
+            <p>Existencia actual y movimientos de entrada y salida.</p>
+          </div>
+          <button class="btn btn-primary" onclick="abrirModalEntradaInventario()">+ Registrar producción</button>
+        </div>
+        <div class="kpi-grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:20px;">
+          <div class="card kpi-card">
+            <div class="lbl">Existencia actual</div>
+            <div class="val" id="inv-stock">0 bolsas</div>
+            <div class="sub">Se descuenta automáticamente con cada venta de hielo en bolsa</div>
+          </div>
+          <div class="card kpi-card">
+            <div class="lbl">Estado</div>
+            <div class="val" id="inv-estado-label" style="font-size:15px;">—</div>
+            <div class="sub">Umbral mínimo sugerido: 150 bolsas</div>
+          </div>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Fecha</th><th>Movimiento</th><th>Cantidad</th><th>Motivo</th><th>Saldo</th></tr></thead>
+            <tbody id="inventario-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== CIERRE DE CAJA ===== -->
+      <section class="view" id="view-cierre">
+        <div class="view-header">
+          <div>
+            <h1>Cierre de caja</h1>
+            <p>Resumen del turno de hoy, jueves 27 de agosto.</p>
+          </div>
+          <button class="btn btn-primary" onclick="abrirModalCierre()">Cerrar caja del día</button>
+        </div>
+        <div class="kpi-grid">
+          <div class="card kpi-card"><div class="lbl">Ventas de contado</div><div class="val" id="kpi-contado">$0.00</div><div class="sub">0 ventas</div></div>
+          <div class="card kpi-card"><div class="lbl">Ventas a crédito</div><div class="val" id="kpi-credito">$0.00</div><div class="sub">0 ventas</div></div>
+          <div class="card kpi-card"><div class="lbl">Cobrado de créditos</div><div class="val">$45.00</div><div class="sub">2 abonos hoy</div></div>
+          <div class="card kpi-card"><div class="lbl">Tasa del día</div><div class="val" id="kpi-tasa">187.32</div><div class="sub">Bs por dólar</div></div>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Método de pago</th><th>Monto USD</th><th>Monto Bs</th></tr></thead>
+            <tbody>
+              <tr><td>Efectivo USD</td><td class="num">$62.00</td><td class="num">11,613.84 Bs</td></tr>
+              <tr><td>Efectivo Bs</td><td class="num">$28.50</td><td class="num">5,338.62 Bs</td></tr>
+              <tr><td>Pago móvil</td><td class="num">$40.00</td><td class="num">7,492.80 Bs</td></tr>
+              <tr><td>Transferencia</td><td class="num">$35.00</td><td class="num">6,556.20 Bs</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== PRECIOS ===== -->
+      <section class="view" id="view-precios">
+        <div class="view-header">
+          <div>
+            <h1>Precios</h1>
+            <p>Catálogo de precios en dólares. El sistema calcula el equivalente en bolívares con la tasa del día.</p>
+          </div>
+        </div>
+        <div id="precios-config"></div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<div id="modal-root"></div>
+
+<script>
+/* ===================== DATOS FICTICIOS ===================== */
+let tasaActual = 187.32;
+
+const precios = [
+  {id:1, categoria:'Planta hielo', producto:'Hielo', codigo:'Precio hielo 3', usd:1.00, pago:'contado', desc:'Precio por bolsa, retiro en planta.'},
+  {id:2, categoria:'Planta hielo', producto:'Hielo', codigo:'Precio hielo 4', usd:0.55, pago:'contado', desc:'A granel en la planta. Aplica a partir del equivalente a 50 bolsas o 50 kilos.'},
+  {id:3, categoria:'Planta hielo', producto:'Hielo', codigo:'Precio hielo 5', usd:0.00, pago:'contado', desc:'Apoyo o consumo autorizado por Alejandro o Carlos. Consumo interno Casmar.'},
+  {id:4, categoria:'Calle', producto:'Hielo', codigo:'Precio hielo 5', usd:0.70, pago:'contado', desc:'Mayor a 30 bolsas. Entrega en negocio o empresa, de contado.'},
+  {id:5, categoria:'Calle', producto:'Hielo', codigo:'Precio hielo 6', usd:0.80, pago:'credito', desc:'Mayor a 30 bolsas. Entrega en negocio a crédito 7 días.'},
+  {id:6, categoria:'Calle', producto:'Hielo', codigo:'Precio hielo 7', usd:0.90, pago:'contado', desc:'Menor a 30 bolsas. Se entrega en negocio de contado.'},
+  {id:7, categoria:'Calle', producto:'Hielo', codigo:'Precio hielo 8', usd:1.00, pago:'credito', desc:'Menor a 30 bolsas. Entrega en negocio a crédito 7 días.'},
+  {id:8, categoria:'Planta agua', producto:'Agua', codigo:'Precio agua 1', usd:0.20, pago:'contado', desc:'Al detal en la planta, botellón propio, para surtir termos (solo agua).'},
+  {id:9, categoria:'Planta agua', producto:'Agua', codigo:'Precio agua 2', usd:0.40, pago:'contado', desc:'Al detal en la planta, botellón propio con tapa y precinto (solo agua).'},
+  {id:10, categoria:'Planta agua', producto:'Agua', codigo:'Precio agua 3', usd:0.80, pago:'contado', desc:'Al mayor en negocios, botellones del cliente. Incluye tapa y precinto.'},
+];
+
+/* Inventario ficticio de bolsas de hielo */
+let stockBolsas = 640;
+let movimientosInventario = [
+  {fecha:'27/08/2026 06:00', tipo:'entrada', cantidad:400, motivo:'Producción del turno mañana', saldo:640},
+  {fecha:'26/08/2026 18:30', tipo:'salida', cantidad:60, motivo:'Venta T-0004', saldo:240},
+  {fecha:'26/08/2026 10:47', tipo:'salida', cantidad:120, motivo:'Venta T-0003', saldo:300},
+  {fecha:'26/08/2026 06:00', tipo:'entrada', cantidad:420, motivo:'Producción del turno mañana', saldo:420},
+];
+
+const clientes = [
+  {id:1, nombre:'Distribuidora El Manantial C.A.', doc:'J-30512345-6', tel:'0414-1234567', diasCredito:7, deuda:false},
+  {id:2, nombre:'Abastos La Esquina', doc:'V-8765432', tel:'0424-9876543', diasCredito:7, deuda:false},
+  {id:3, nombre:'Panadería Doña Carmen', doc:'V-11223344', tel:'0412-5566778', diasCredito:0, deuda:false},
+  {id:4, nombre:'Comercial Hielo Norte', doc:'J-40998877-1', tel:'0416-3344556', diasCredito:7, deuda:true},
+  {id:5, nombre:'Restaurant Marea Azul', doc:'J-29887766-2', tel:'0414-7788990', diasCredito:7, deuda:false},
+];
+
+let ventas = [
+  {ticket:'T-0001', fecha:'26/08/2026 08:14', clienteId:2, tipoPago:'contado', totalUsd:30.00, tasa:186.90, estado:'activa'},
+  {ticket:'T-0002', fecha:'26/08/2026 09:02', clienteId:null, tipoPago:'contado', totalUsd:12.00, tasa:186.90, estado:'activa'},
+  {ticket:'T-0003', fecha:'26/08/2026 10:47', clienteId:1, tipoPago:'credito', totalUsd:84.00, tasa:186.90, estado:'activa'},
+  {ticket:'T-0004', fecha:'26/08/2026 13:20', clienteId:4, tipoPago:'credito', totalUsd:56.00, tasa:186.90, estado:'activa'},
+  {ticket:'T-0005', fecha:'26/08/2026 15:05', clienteId:3, tipoPago:'contado', totalUsd:18.00, tasa:186.90, estado:'anulada'},
+  {ticket:'T-0006', fecha:'27/08/2026 07:40', clienteId:5, tipoPago:'credito', totalUsd:72.00, tasa:187.32, estado:'activa'},
+  {ticket:'T-0007', fecha:'27/08/2026 08:55', clienteId:null, tipoPago:'contado', totalUsd:9.00, tasa:187.32, estado:'activa'},
+];
+
+let creditos = [
+  {cliente:'Distribuidora El Manantial C.A.', ticket:'T-0003', total:84.00, pagado:0, vencimiento:'02/09/2026', estado:'pendiente'},
+  {cliente:'Comercial Hielo Norte', ticket:'T-0004', total:56.00, pagado:0, vencimiento:'20/08/2026', estado:'vencido'},
+  {cliente:'Restaurant Marea Azul', ticket:'T-0006', total:72.00, pagado:30.00, vencimiento:'03/09/2026', estado:'parcial'},
+  {cliente:'Abastos La Esquina', ticket:'T-0000', total:45.00, pagado:45.00, vencimiento:'10/08/2026', estado:'pagado'},
+];
+
+/* ===================== ESTADO DE LA VENTA ACTUAL ===================== */
+let carrito = [];
+let categoriaActiva = 'Planta hielo';
+let tipoPagoActual = 'contado';
+
+/* ===================== HELPERS ===================== */
+function formatUsd(v){ return '$' + v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function formatBs(usd){ return (usd*tasaActual).toLocaleString('es-VE',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' Bs'; }
+
+/* ===================== LOGIN ===================== */
+function iniciarSesion(){
+  const tasaInput = document.getElementById('login-tasa');
+  const val = parseFloat(tasaInput.value);
+  if(!val || val <= 0){
+    tasaInput.style.borderColor = 'var(--danger)';
+    return;
+  }
+  tasaActual = val;
+  document.getElementById('login-overlay').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  actualizarTasaEnPantalla();
+  renderTodo();
+}
+function cerrarSesion(){
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-overlay').style.display = 'flex';
+}
+function actualizarTasaEnPantalla(){
+  document.getElementById('topbar-tasa').textContent = tasaActual.toLocaleString('es-VE',{minimumFractionDigits:2}) + ' Bs';
+  document.getElementById('kpi-tasa').textContent = tasaActual.toLocaleString('es-VE',{minimumFractionDigits:2});
+}
+function abrirModalTasa(){
+  abrirModal(`
+    <div class="modal-header"><h3>Actualizar tasa del día</h3><button onclick="cerrarModal()">×</button></div>
+    <label class="field-label">Nueva tasa (Bs por USD)</label>
+    <input class="input num" id="modal-tasa-input" type="number" step="0.01" value="${tasaActual}">
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarNuevaTasa()">Guardar tasa</button>
+    </div>
+  `);
+}
+function guardarNuevaTasa(){
+  const val = parseFloat(document.getElementById('modal-tasa-input').value);
+  if(val > 0){
+    tasaActual = val;
+    actualizarTasaEnPantalla();
+    renderPrecios();
+    renderCarrito();
+    cerrarModal();
+  }
+}
+
+/* ===================== NAVEGACIÓN ===================== */
+function toggleSidebar(){
+  document.getElementById('sidebar').classList.toggle('collapsed');
+}
+function irAVista(nombre){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+nombre).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.querySelector(`.nav-item[data-view="${nombre}"]`).classList.add('active');
+}
+
+/* ===================== NUEVA VENTA ===================== */
+function renderCatTabs(){
+  const cats = [...new Set(precios.map(p=>p.categoria))];
+  const el = document.getElementById('cat-tabs');
+  el.innerHTML = cats.map(c=>`<button class="cat-tab ${c===categoriaActiva?'active':''}" onclick="setCategoria('${c}')">${c==='Planta hielo'?'Precio planta hielo':c==='Calle'?'Precio calle':'Precio planta agua'}</button>`).join('');
+}
+function setCategoria(c){ categoriaActiva = c; renderCatTabs(); renderPrecios(); }
+
+function renderPrecios(){
+  const el = document.getElementById('price-grid');
+  const lista = precios.filter(p=>p.categoria===categoriaActiva && (p.pago===tipoPagoActual || p.pago==='ambos'));
+
+  const infoEl = document.getElementById('venta-stock-info');
+  const tieneHielo = precios.some(p=>p.categoria===categoriaActiva && p.producto==='Hielo');
+  infoEl.textContent = tieneHielo ? `Bolsas de hielo disponibles en planta: ${stockBolsas.toLocaleString('es-VE')}` : '';
+
+  if(lista.length===0){
+    el.innerHTML = `<div class="cart-empty" style="grid-column:1/-1;">No hay precios de ${tipoPagoActual==='contado'?'contado':'crédito'} en esta categoría.</div>`;
+    return;
+  }
+  el.innerHTML = lista.map(p=>`
+    <button class="card price-card ${carrito.some(i=>i.precioId===p.id)?'selected':''}" onclick="agregarAlCarrito(${p.id})">
+      <div class="code">${p.codigo}</div>
+      <div class="amounts"><span class="usd">${formatUsd(p.usd)}</span><span class="bs">${formatBs(p.usd)}</span></div>
+      <div class="desc">${p.desc}</div>
+    </button>
+  `).join('');
+}
+
+function agregarAlCarrito(precioId){
+  const existente = carrito.find(i=>i.precioId===precioId);
+  if(existente){ existente.cantidad++; }
+  else { carrito.push({precioId, cantidad:1}); }
+  renderCarrito();
+}
+function cambiarCantidad(precioId, delta){
+  const item = carrito.find(i=>i.precioId===precioId);
+  if(!item) return;
+  item.cantidad += delta;
+  if(item.cantidad <= 0){ carrito = carrito.filter(i=>i.precioId!==precioId); }
+  renderCarrito();
+}
+function setCantidad(precioId, valor){
+  const item = carrito.find(i=>i.precioId===precioId);
+  if(!item) return;
+  let v = parseInt(valor);
+  if(!v || v < 1) v = 1;
+  item.cantidad = v;
+  renderCarrito();
+}
+function quitarDelCarrito(precioId){
+  carrito = carrito.filter(i=>i.precioId!==precioId);
+  renderCarrito();
+}
+
+function renderCarrito(){
+  const el = document.getElementById('cart-items');
+  document.getElementById('cart-count').textContent = carrito.length + (carrito.length===1?' línea':' líneas');
+  if(carrito.length===0){
+    el.innerHTML = '<div class="cart-empty">Aún no has agregado precios al ticket</div>';
+  } else {
+    el.innerHTML = carrito.map(item=>{
+      const p = precios.find(pp=>pp.id===item.precioId);
+      const subtotal = p.usd * item.cantidad;
+      return `
+        <div class="cart-item">
+          <div class="info">
+            <div class="name">${p.codigo}</div>
+            <div class="price">${formatUsd(p.usd)} c/u</div>
+          </div>
+          <div class="qty-stepper">
+            <button onclick="cambiarCantidad(${p.id},-1)">–</button>
+            <input type="number" min="1" class="qty-input" value="${item.cantidad}" onchange="setCantidad(${p.id}, this.value)">
+            <button onclick="cambiarCantidad(${p.id},1)">+</button>
+          </div>
+          <div class="num" style="width:56px;text-align:right;font-weight:600;">${formatUsd(subtotal)}</div>
+          <button class="remove" onclick="quitarDelCarrito(${p.id})">×</button>
+        </div>`;
+    }).join('');
+  }
+  const total = carrito.reduce((sum,item)=>{
+    const p = precios.find(pp=>pp.id===item.precioId);
+    return sum + p.usd*item.cantidad;
+  },0);
+  document.getElementById('tot-subtotal').textContent = formatUsd(total);
+  document.getElementById('tot-usd').textContent = formatUsd(total);
+  document.getElementById('tot-bs').textContent = '(' + formatBs(total) + ')';
+  actualizarEstadoBotonFinalizar();
+  renderPrecios();
+}
+
+function poblarSelectClientes(){
+  // El combobox de cliente lee directamente del arreglo `clientes`, no requiere poblarse.
+}
+let clienteSeleccionadoId = null;
+
+function renderClienteDropdown(query){
+  const dd = document.getElementById('cliente-dropdown');
+  const q = query.trim().toLowerCase();
+  let lista = clientes;
+  if(q){
+    lista = clientes.filter(c =>
+      c.nombre.toLowerCase().includes(q) ||
+      c.doc.toLowerCase().includes(q) ||
+      c.tel.toLowerCase().includes(q)
+    );
+  }
+  let html = '<div class="combobox-item" onmousedown="seleccionarCliente(null)">Sin cliente — venta de mostrador</div>';
+  if(lista.length === 0 && q){
+    html += `<div class="combobox-item action" onmousedown="abrirModalCliente(true)">No se encontró ningún cliente para "${query.trim()}". Clic aquí para agregarlo.</div>`;
+  } else {
+    lista.forEach(c=>{
+      html += `<div class="combobox-item" onmousedown="seleccionarCliente(${c.id})">${c.nombre}<div class="doc">${c.doc} · ${c.tel}</div></div>`;
+    });
+    html += '<div class="combobox-item action" onmousedown="abrirModalCliente(true)">+ Agregar nuevo cliente</div>';
+  }
+  dd.innerHTML = html;
+}
+function onClienteFocus(){
+  renderClienteDropdown(document.getElementById('cliente-input').value);
+  document.getElementById('cliente-dropdown').classList.remove('hidden');
+}
+function onClienteInput(){
+  clienteSeleccionadoId = null;
+  renderClienteDropdown(document.getElementById('cliente-input').value);
+  document.getElementById('cliente-dropdown').classList.remove('hidden');
+  actualizarEstadoBotonFinalizar();
+}
+function onClienteBlur(){
+  setTimeout(()=>{ document.getElementById('cliente-dropdown').classList.add('hidden'); }, 150);
+}
+function seleccionarCliente(id){
+  clienteSeleccionadoId = id;
+  const input = document.getElementById('cliente-input');
+  input.value = id ? clientes.find(c=>c.id===id).nombre : '';
+  document.getElementById('cliente-dropdown').classList.add('hidden');
+  actualizarEstadoBotonFinalizar();
+}
+
+function setTipoPago(tipo){
+  tipoPagoActual = tipo;
+  document.getElementById('btn-contado').classList.toggle('active', tipo==='contado');
+  document.getElementById('btn-credito').classList.toggle('active', tipo==='credito');
+  renderPrecios();
+  actualizarEstadoBotonFinalizar();
+}
+
+function actualizarEstadoBotonFinalizar(){
+  const cliente = clientes.find(c=>c.id===clienteSeleccionadoId);
+  const warning = document.getElementById('warning-deuda');
+  const btn = document.getElementById('btn-finalizar');
+  const bloqueado = tipoPagoActual==='credito' && cliente && cliente.deuda;
+  warning.classList.toggle('hidden', !bloqueado);
+  btn.disabled = carrito.length===0 || bloqueado;
+}
+
+function finalizarVenta(){
+  const cliente = clientes.find(c=>c.id===clienteSeleccionadoId);
+  const total = carrito.reduce((sum,item)=>{
+    const p = precios.find(pp=>pp.id===item.precioId);
+    return sum + p.usd*item.cantidad;
+  },0);
+  const bolsasHielo = carrito.reduce((sum,item)=>{
+    const p = precios.find(pp=>pp.id===item.precioId);
+    return p.producto==='Hielo' ? sum + item.cantidad : sum;
+  },0);
+  const numeroTicket = 'T-' + String(ventas.length+1).padStart(4,'0');
+
+  const lineasHtml = carrito.map(item=>{
+    const p = precios.find(pp=>pp.id===item.precioId);
+    return `<div class="line"><span>${item.cantidad} × ${p.codigo}</span><span>${formatUsd(p.usd*item.cantidad)}</span></div>`;
+  }).join('');
+
+  abrirModal(`
+    <div class="modal-header"><h3>Venta registrada</h3><button onclick="cerrarModal()">×</button></div>
+    <div class="ticket">
+      <div class="center brand">CASMAR — PLANTA DE HIELO</div>
+      <div class="center">Ticket ${numeroTicket}</div>
+      <div class="center">27/08/2026 · 09:${10+ventas.length} am</div>
+      <hr>
+      <div class="line"><span>Cliente</span><span>${cliente ? cliente.nombre : 'Sin cliente'}</span></div>
+      <div class="line"><span>Tipo de pago</span><span>${tipoPagoActual==='contado'?'Contado':'Crédito'}</span></div>
+      <div class="line"><span>Tasa usada</span><span>${tasaActual.toFixed(2)} Bs</span></div>
+      <hr>
+      ${lineasHtml}
+      <hr>
+      <div class="line" style="font-weight:600;"><span>Total</span><span>${formatUsd(total)}</span></div>
+      <div class="line muted"><span>Equivalente</span><span>${formatBs(total)}</span></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="cerrarModal()">Imprimir</button>
+      <button class="btn btn-primary" onclick="nuevaVentaDesdeModal('${numeroTicket}', ${total}, ${clienteSeleccionadoId || null}, '${tipoPagoActual}', ${bolsasHielo})">Nueva venta</button>
+    </div>
+  `);
+}
+
+function nuevaVentaDesdeModal(numeroTicket, total, clienteId, tipoPago, bolsasHielo){
+  ventas.unshift({ticket:numeroTicket, fecha:'27/08/2026 09:'+(10+ventas.length), clienteId: clienteId||null, tipoPago, totalUsd: total, tasa: tasaActual, estado:'activa'});
+  if(bolsasHielo > 0){ registrarSalidaInventario(bolsasHielo, numeroTicket); }
+  carrito = [];
+  seleccionarCliente(null);
+  setTipoPago('contado');
+  renderCarrito();
+  renderHistorial();
+  cerrarModal();
+}
+
+/* ===================== HISTORIAL ===================== */
+function renderHistorial(){
+  const filtroTipo = document.getElementById('filtro-tipo-pago').value;
+  const busqueda = document.getElementById('filtro-busqueda').value.toLowerCase();
+  const tbody = document.getElementById('historial-body');
+  const filtradas = ventas.filter(v=>{
+    if(filtroTipo!=='todos' && v.tipoPago!==filtroTipo) return false;
+    const nombreCliente = v.clienteId ? clientes.find(c=>c.id===v.clienteId).nombre : 'sin cliente';
+    if(busqueda && !nombreCliente.toLowerCase().includes(busqueda) && !v.ticket.toLowerCase().includes(busqueda)) return false;
+    return true;
+  });
+  tbody.innerHTML = filtradas.map(v=>{
+    const cliente = v.clienteId ? clientes.find(c=>c.id===v.clienteId).nombre : 'Sin cliente';
+    return `<tr>
+      <td class="num">${v.ticket}</td>
+      <td>${v.fecha}</td>
+      <td>${cliente}</td>
+      <td><span class="tag tag-${v.tipoPago}">${v.tipoPago==='contado'?'Contado':'Crédito'}</span></td>
+      <td class="num">${formatUsd(v.totalUsd)}</td>
+      <td class="num">${(v.totalUsd*v.tasa).toLocaleString('es-VE',{minimumFractionDigits:2})} Bs</td>
+      <td class="num">${v.tasa.toFixed(2)}</td>
+      <td><span class="tag tag-${v.estado}">${v.estado==='activa'?'Activa':'Anulada'}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+/* ===================== CLIENTES ===================== */
+function renderClientes(){
+  const tbody = document.getElementById('clientes-body');
+  tbody.innerHTML = clientes.map(c=>`
+    <tr>
+      <td>${c.nombre}</td>
+      <td class="num">${c.doc}</td>
+      <td class="num">${c.tel}</td>
+      <td class="num">${c.diasCredito} días</td>
+      <td>${c.deuda?'<span class="tag tag-vencido">Con deuda</span>':'<span class="tag tag-activa">Al día</span>'}</td>
+      <td><button class="btn-ghost" onclick="alert('Edición de clientes disponible en la versión completa.')">Editar</button></td>
+    </tr>`).join('');
+}
+function abrirModalCliente(fromVenta){
+  abrirModal(`
+    <div class="modal-header"><h3>Nuevo cliente</h3><button onclick="cerrarModal()">×</button></div>
+    <div class="login-field">
+      <label class="field-label">Nombre o razón social</label>
+      <input class="input" id="nc-nombre" placeholder="Ej. Abastos La Esquina">
+      <div id="nc-error" style="color:var(--danger);font-size:11.5px;margin-top:4px;display:none;">Ingresa un nombre para el cliente.</div>
+    </div>
+    <div class="login-field"><label class="field-label">Documento (V / J)</label><input class="input" id="nc-doc" placeholder="Ej. J-30123456-7"></div>
+    <div class="login-field"><label class="field-label">Teléfono</label><input class="input" id="nc-tel" placeholder="Ej. 0414-1234567"></div>
+    <div class="login-field"><label class="field-label">Días de crédito por defecto</label><input class="input" id="nc-dias" type="number" value="7"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarCliente(${fromVenta ? 'true' : 'false'})">Guardar cliente</button>
+    </div>
+  `);
+}
+function guardarCliente(fromVenta){
+  const nombreInput = document.getElementById('nc-nombre');
+  const nombre = nombreInput.value.trim();
+  if(!nombre){
+    document.getElementById('nc-error').style.display = 'block';
+    nombreInput.style.borderColor = 'var(--danger)';
+    return;
+  }
+  const nuevo = {
+    id: Math.max(...clientes.map(c=>c.id)) + 1,
+    nombre,
+    doc: document.getElementById('nc-doc').value.trim() || '—',
+    tel: document.getElementById('nc-tel').value.trim() || '—',
+    diasCredito: parseInt(document.getElementById('nc-dias').value) || 0,
+    deuda:false
+  };
+  clientes.push(nuevo);
+  renderClientes();
+  if(fromVenta){
+    seleccionarCliente(nuevo.id);
+  }
+  cerrarModal();
+}
+
+/* ===================== CREDITOS ===================== */
+function renderCreditos(){
+  const tbody = document.getElementById('creditos-body');
+  tbody.innerHTML = creditos.map(c=>{
+    const saldo = c.total - c.pagado;
+    return `<tr>
+      <td>${c.cliente}</td>
+      <td class="num">${c.ticket}</td>
+      <td class="num">${formatUsd(c.total)}</td>
+      <td class="num">${formatUsd(c.pagado)}</td>
+      <td class="num" style="font-weight:600;">${formatUsd(saldo)}</td>
+      <td>${c.vencimiento}</td>
+      <td><span class="tag tag-${c.estado}">${c.estado.charAt(0).toUpperCase()+c.estado.slice(1)}</span></td>
+      <td>${saldo>0?`<button class="btn-ghost" onclick="abrirModalAbono('${c.cliente}', ${saldo})">Registrar abono</button>`:''}</td>
+    </tr>`;
+  }).join('');
+}
+function abrirModalAbono(cliente, saldo){
+  abrirModal(`
+    <div class="modal-header"><h3>Registrar abono</h3><button onclick="cerrarModal()">×</button></div>
+    <p class="muted">Cliente: <strong>${cliente}</strong> — saldo pendiente ${formatUsd(saldo)}</p>
+    <div class="login-field"><label class="field-label">Monto a abonar (USD)</label><input class="input" type="number" step="0.01" value="${saldo}"></div>
+    <div class="login-field"><label class="field-label">Método de pago</label>
+      <select class="input"><option>Efectivo USD</option><option>Efectivo Bs</option><option>Transferencia</option><option>Pago móvil</option></select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="cerrarModal()">Guardar abono</button>
+    </div>
+  `);
+}
+
+/* ===================== CIERRE DE CAJA ===================== */
+function renderCierre(){
+  const contado = ventas.filter(v=>v.tipoPago==='contado' && v.estado==='activa');
+  const credito = ventas.filter(v=>v.tipoPago==='credito' && v.estado==='activa');
+  document.getElementById('kpi-contado').textContent = formatUsd(contado.reduce((s,v)=>s+v.totalUsd,0));
+  document.getElementById('kpi-credito').textContent = formatUsd(credito.reduce((s,v)=>s+v.totalUsd,0));
+  document.querySelectorAll('#view-cierre .kpi-card .sub')[0].textContent = contado.length + ' ventas';
+  document.querySelectorAll('#view-cierre .kpi-card .sub')[1].textContent = credito.length + ' ventas';
+}
+function abrirModalCierre(){
+  abrirModal(`
+    <div class="modal-header"><h3>Confirmar cierre de caja</h3><button onclick="cerrarModal()">×</button></div>
+    <p>Se cerrará el turno del día con la tasa de <strong>${tasaActual.toFixed(2)} Bs</strong>. Esta acción no se puede deshacer.</p>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="cerrarModal()">Confirmar cierre</button>
+    </div>
+  `);
+}
+
+/* ===================== PRECIOS (CONFIGURACIÓN) ===================== */
+function renderPreciosConfig(){
+  const categorias = [...new Set(precios.map(p=>p.categoria))];
+  const el = document.getElementById('precios-config');
+  el.innerHTML = categorias.map(cat=>{
+    const filas = precios.filter(p=>p.categoria===cat).map(p=>`
+      <tr>
+        <td class="num">${p.codigo}</td>
+        <td><input class="input num edit-price-input" value="${p.usd.toFixed(2)}" onchange="actualizarPrecio(${p.id}, this.value)"></td>
+        <td class="num muted" id="precio-bs-${p.id}">${formatBs(p.usd)}</td>
+        <td><span class="tag tag-${p.pago==='ambos'?'contado':p.pago}">${p.pago==='contado'?'Contado':p.pago==='credito'?'Crédito':'Contado y crédito'}</span></td>
+        <td class="muted">${p.desc}</td>
+      </tr>`).join('');
+    const titulo = cat==='Planta hielo'?'Precio planta hielo':cat==='Calle'?'Precio calle':'Precio planta agua';
+    return `<div class="card price-group" style="padding:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 style="margin:0;">${titulo}</h3>
+        <button class="btn btn-outline" style="padding:6px 12px;font-size:12.5px;" onclick="abrirModalNuevoPrecio('${cat}')">+ Agregar precio</button>
+      </div>
+      <table><thead><tr><th>Código</th><th>Valor USD</th><th>Equivalente Bs</th><th>Tipo de pago</th><th>Condición</th></tr></thead>
+      <tbody>${filas}</tbody></table>
+    </div>`;
+  }).join('');
+}
+function actualizarPrecio(id, valor){
+  const p = precios.find(pp=>pp.id===id);
+  p.usd = parseFloat(valor) || 0;
+  document.getElementById('precio-bs-'+id).textContent = formatBs(p.usd);
+  renderPrecios();
+}
+function abrirModalNuevoPrecio(categoria){
+  const titulo = categoria==='Planta hielo'?'Precio planta hielo':categoria==='Calle'?'Precio calle':'Precio planta agua';
+  abrirModal(`
+    <div class="modal-header"><h3>Nuevo precio — ${titulo}</h3><button onclick="cerrarModal()">×</button></div>
+    <div class="login-field"><label class="field-label">Código</label><input class="input" id="np-codigo" placeholder="Ej. Precio hielo 9"></div>
+    <div class="login-field"><label class="field-label">Valor en USD</label><input class="input" id="np-usd" type="number" step="0.01" min="0" value="0.00"></div>
+    <div class="login-field">
+      <label class="field-label">Tipo de pago</label>
+      <select class="input" id="np-pago">
+        <option value="contado">Contado</option>
+        <option value="credito">Crédito</option>
+        <option value="ambos">Contado y crédito</option>
+      </select>
+    </div>
+    <div class="login-field"><label class="field-label">Condición / descripción</label><input class="input" id="np-desc" placeholder="Ej. Mayor a 30 bolsas, entrega de contado"></div>
+    <div id="np-error" style="color:var(--danger);font-size:11.5px;margin-top:-8px;margin-bottom:12px;display:none;">Completa el código y un valor en USD válido.</div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarNuevoPrecio('${categoria}')">Guardar precio</button>
+    </div>
+  `);
+}
+function guardarNuevoPrecio(categoria){
+  const codigo = document.getElementById('np-codigo').value.trim();
+  const usd = parseFloat(document.getElementById('np-usd').value);
+  const pago = document.getElementById('np-pago').value;
+  const desc = document.getElementById('np-desc').value.trim();
+  if(!codigo || isNaN(usd) || usd < 0){
+    document.getElementById('np-error').style.display = 'block';
+    return;
+  }
+  const producto = categoria === 'Planta agua' ? 'Agua' : 'Hielo';
+  const nuevoId = Math.max(...precios.map(p=>p.id)) + 1;
+  precios.push({id:nuevoId, categoria, producto, codigo, usd, pago, desc: desc || 'Sin condiciones adicionales.'});
+  renderPreciosConfig();
+  renderCatTabs();
+  renderPrecios();
+  cerrarModal();
+}
+
+/* ===================== INVENTARIO ===================== */
+function renderInventario(){
+  document.getElementById('inv-stock').textContent = stockBolsas.toLocaleString('es-VE') + ' bolsas';
+  const lbl = document.getElementById('inv-estado-label');
+  if(stockBolsas <= 150){ lbl.textContent = 'Nivel bajo'; lbl.style.color = 'var(--danger)'; }
+  else { lbl.textContent = 'Nivel saludable'; lbl.style.color = 'var(--success)'; }
+  const tbody = document.getElementById('inventario-body');
+  tbody.innerHTML = movimientosInventario.map(m=>`
+    <tr>
+      <td>${m.fecha}</td>
+      <td><span class="tag ${m.tipo==='entrada'?'tag-activa':'tag-vencido'}">${m.tipo==='entrada'?'Entrada':'Salida'}</span></td>
+      <td class="num">${m.tipo==='entrada'?'+':'−'}${m.cantidad}</td>
+      <td>${m.motivo}</td>
+      <td class="num">${m.saldo}</td>
+    </tr>`).join('');
+}
+function registrarSalidaInventario(cantidad, ticket){
+  stockBolsas -= cantidad;
+  movimientosInventario.unshift({fecha:'27/08/2026', tipo:'salida', cantidad, motivo:'Venta '+ticket, saldo:stockBolsas});
+  renderInventario();
+  renderPrecios();
+}
+function abrirModalEntradaInventario(){
+  abrirModal(`
+    <div class="modal-header"><h3>Registrar producción</h3><button onclick="cerrarModal()">×</button></div>
+    <div class="login-field"><label class="field-label">Cantidad de bolsas producidas</label><input class="input" id="inv-entrada-cantidad" type="number" min="1" value="100"></div>
+    <div class="login-field"><label class="field-label">Nota (opcional)</label><input class="input" id="inv-entrada-nota" placeholder="Ej. Producción turno tarde"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarEntradaInventario()">Guardar entrada</button>
+    </div>
+  `);
+}
+function guardarEntradaInventario(){
+  const cantidad = parseInt(document.getElementById('inv-entrada-cantidad').value) || 0;
+  const nota = document.getElementById('inv-entrada-nota').value.trim() || 'Producción registrada';
+  if(cantidad <= 0) return;
+  stockBolsas += cantidad;
+  movimientosInventario.unshift({fecha:'27/08/2026', tipo:'entrada', cantidad, motivo:nota, saldo:stockBolsas});
+  renderInventario();
+  renderPrecios();
+  cerrarModal();
+}
+
+/* ===================== MODAL GENÉRICO ===================== */
+function abrirModal(html){
+  document.getElementById('modal-root').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this) cerrarModal()">
+      <div class="modal-box">${html}</div>
+    </div>`;
+}
+function cerrarModal(){ document.getElementById('modal-root').innerHTML = ''; }
+
+/* ===================== INICIALIZACIÓN ===================== */
+function renderTodo(){
+  renderCatTabs();
+  renderPrecios();
+  poblarSelectClientes();
+  renderCarrito();
+  renderHistorial();
+  renderClientes();
+  renderCreditos();
+  renderInventario();
+  renderCierre();
+  renderPreciosConfig();
+}
+</script>
+</body>
+</html>

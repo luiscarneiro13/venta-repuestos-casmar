@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockup — Registrar entrada con márgenes</title>
+<style>
+  :root {
+    --bg: #f0f2f1;
+    --surface: #ffffff;
+    --surface-alt: #f5f7f6;
+    --primary: #27363b;
+    --primary-dark: #18262b;
+    --primary-light: #e9eff0;
+    --accent: #52666c;
+    --accent-light: #edf1f1;
+    --success: #276747;
+    --success-light: #e7f2eb;
+    --text-primary: #1b292f;
+    --text-secondary: #4d5e63;
+    --text-muted: #64757a;
+    --border: #d5dedc;
+    --radius: 10px;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: var(--font); background: var(--bg);
+    color: var(--text-primary); display: flex; justify-content: center;
+    padding: 40px 16px; min-height: 100vh;
+  }
+  /* ---------- Modal ---------- */
+  .modal {
+    background: var(--surface); border-radius: 14px; width: 100%;
+    max-width: 860px; box-shadow: 0 18px 50px rgba(24, 38, 43, .18);
+    display: flex; flex-direction: column; overflow: hidden; height: fit-content;
+  }
+  .modal-head {
+    padding: 18px 24px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .modal-head h2 { margin: 0; font-size: 1.15rem; font-weight: 700; }
+  .modal-close { border: 0; background: none; font-size: 1.3rem; color: var(--text-muted); cursor: pointer; }
+  .modal-body { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+  .modal-foot {
+    padding: 16px 24px; border-top: 1px solid var(--border);
+    display: flex; justify-content: flex-end; gap: 10px;
+  }
+  /* ---------- Campos ---------- */
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field-label { font-size: .8rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; }
+  .input {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--border);
+    border-radius: var(--radius); font: inherit; background: var(--surface);
+    color: var(--text-primary); min-height: 42px;
+  }
+  .input:focus { outline: 2px solid rgba(82,102,108,.28); border-color: var(--accent); }
+  .input[readonly] { background: var(--surface-alt); font-weight: 600; }
+  .row-3 { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 16px; }
+  .proveedor-label { display: flex; align-items: center; justify-content: space-between; }
+  .btn { border: 0; border-radius: var(--radius); font: inherit; font-weight: 600; cursor: pointer; min-height: 42px; padding: 8px 18px; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-outline { background: var(--surface); border: 1px solid var(--border); color: var(--text-primary); }
+  .btn-sm { min-height: 32px; padding: 4px 10px; font-size: .85rem; }
+  .muted { font-size: .82rem; color: var(--text-muted); margin: 0; }
+  /* ---------- Tabla de márgenes ---------- */
+  .margenes-card { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .margenes-head {
+    background: var(--primary-light); padding: 10px 14px;
+    font-size: .8rem; font-weight: 700; color: var(--text-secondary);
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  .margenes-tabla { width: 100%; border-collapse: collapse; }
+  .margenes-tabla th {
+    font-size: .75rem; color: var(--text-muted); font-weight: 700;
+    padding: 8px 12px; border-bottom: 1px solid var(--border);
+    text-transform: uppercase; letter-spacing: .03em; white-space: nowrap;
+  }
+  /* Encabezados de grupo: bandas sólidas distintas + divisor */
+  .margenes-tabla thead tr:first-child th.grupo-bcv {
+    background: var(--primary); color: #fff; text-align: center;
+  }
+  .margenes-tabla thead tr:first-child th.grupo-usdt {
+    background: var(--accent); color: #fff; text-align: center;
+    border-left: 1px solid var(--primary-dark);
+  }
+  .margenes-tabla thead tr:nth-child(2) th.grupo-bcv {
+    background: var(--primary-light); color: var(--text-secondary); text-align: center;
+  }
+  .margenes-tabla thead tr:nth-child(2) th.grupo-usdt {
+    background: #d6e0e1; color: var(--text-secondary); text-align: center;
+    border-left: 1px solid var(--primary-dark);
+  }
+  .margenes-tabla td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .margenes-tabla tr:last-child td { border-bottom: 0; }
+  .margenes-tabla td.bcv { background: #f1f5f5; }
+  .margenes-tabla td.usdt { background: #e2e9ea; }
+  .margenes-tabla td.sep-usdt { border-left: 1px solid var(--primary-dark); }
+  .tipo-nombre { font-weight: 700; }
+  .tipo-tag { display: block; font-size: .72rem; font-weight: 400; color: var(--text-muted); margin-top: 2px; }
+  .input-pct {
+    width: 80px; padding: 8px 10px; border: 1px solid var(--border);
+    border-radius: 8px; font: inherit; text-align: right; min-height: 38px;
+  }
+  .input-pct:focus { outline: 2px solid rgba(82,102,108,.28); border-color: var(--accent); }
+  .pct-wrap { display: inline-flex; align-items: center; gap: 4px; }
+  .pct-wrap::after { content: '%'; color: var(--text-muted); font-weight: 600; }
+  .precio-calc { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: .95rem; }
+  .precio-calc small { display: block; font-size: .68rem; font-weight: 400; color: var(--text-muted); }
+  .usdt-note { display: block; font-size: .68rem; color: var(--text-muted); margin-top: 3px; }
+  .tasas-info {
+    padding: 8px 14px; border-top: 1px solid var(--border);
+    font-size: .78rem; color: var(--text-muted); background: var(--surface-alt);
+  }
+  @media (max-width: 720px) {
+    .row-3 { grid-template-columns: 1fr; }
+    .margenes-tabla { font-size: .85rem; }
+    .input-pct { width: 64px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="modal">
+  <div class="modal-head">
+    <h2>Registrar entrada de mercancía</h2>
+    <button class="modal-close" title="Cerrar">✕</button>
+  </div>
+
+  <div class="modal-body">
+    <div class="field">
+      <label class="field-label" for="producto">Producto *</label>
+      <input id="producto" class="input" readonly value="Producto de ejemplo — Marca X">
+    </div>
+
+    <div class="row-3">
+      <div class="field">
+        <label class="field-label" for="cantidad">Cantidad *</label>
+        <input id="cantidad" class="input" type="number" min="1" step="1" value="10">
+      </div>
+      <div class="field">
+        <div class="proveedor-label">
+          <label class="field-label" for="proveedor">Proveedor *</label>
+          <button class="btn btn-outline btn-sm" type="button">+ Agregar</button>
+        </div>
+        <select id="proveedor" class="input">
+          <option>Repuestos del Centro C.A.</option>
+          <option>Importadora Andina</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="costo">Costo de compra (USD) *</label>
+        <input id="costo" class="input" type="text" inputmode="numeric" value="1.000,00">
+      </div>
+    </div>
+
+    <div class="field">
+      <span class="field-label">Utilidad por tipo de precio</span>
+      <div class="margenes-card">
+        <div class="margenes-head" id="margenesHead">% Utilidad</div>
+        <table class="margenes-tabla">
+          <thead>
+            <tr>
+              <th rowspan="2">Tipo</th>
+              <th class="grupo-bcv" colspan="2">Si paga en Bs (tasa BCV)</th>
+              <th class="grupo-usdt" colspan="2">Si paga en USDT / divisas (tasa Binance)</th>
+            </tr>
+            <tr>
+              <th class="grupo-bcv">% Utilidad</th>
+              <th class="grupo-bcv">Precio</th>
+              <th class="grupo-usdt">% Utilidad</th>
+              <th class="grupo-usdt">Precio</th>
+            </tr>
+          </thead>
+          <tbody id="filas"><!-- JS --></tbody>
+        </table>
+        <div class="tasas-info" id="tasasInfo"></div>
+      </div>
+      <p class="muted">Un solo % de utilidad sobre el costo — es el mismo en ambos métodos y editable desde cualquiera.
+        Precio $ = costo × (1 + %) · Precio Bs = precio $ × BCV · Precio USDT = precio Bs ÷ Binance.</p>
+    </div>
+
+    <div class="field">
+      <label class="field-label" for="nota">Nota (opcional)</label>
+      <input id="nota" class="input" placeholder="Ej. Factura 1234">
+    </div>
+  </div>
+
+  <div class="modal-foot">
+    <button class="btn btn-outline">Cancelar</button>
+    <button class="btn btn-primary">Guardar entrada</button>
+  </div>
+</div>
+
+<script>
+  const TASA_BCV = 100.00;      // Bs por USD (oficial) — ejemplo del cliente
+  const TASA_USDT = 120.00;     // Bs por USDT (Binance P2P)
+
+  // Un solo % de utilidad por tipo (markup sobre el costo):
+  //   precio_$   = costo × (1 + %)
+  //   pago en Bs = precio_$ × tasa BCV
+  //   pago USDT  = precio en Bs ÷ tasa Binance   (equivale al pago en Bs)
+  const tipos = [
+    { nombre: 'Precio Full',     origen: 'propio',  m: 100 },
+    { nombre: 'Precio Especial', origen: 'propio',  m: 75 },
+    { nombre: 'Precio Interno',  origen: 'default', m: 50 },
+  ];
+
+  const filas = document.getElementById('filas');
+  const costoInput = document.getElementById('costo');
+
+  const parseNum = (txt) => Number(String(txt).replace(/\./g, '').replace(',', '.')) || 0;
+  const fmt = (n, dec = 2) => n.toLocaleString('es-VE', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  const round2 = (n) => Math.round(n * 100) / 100;
+
+  function render() {
+    const costo = parseNum(costoInput.value);
+    filas.innerHTML = '';
+    tipos.forEach((t, i) => {
+      const pUsd  = round2(costo * (1 + t.m / 100));   // precio de venta en $
+      const pBs   = round2(pUsd * TASA_BCV);           // cobro en Bs
+      const pUsdt = round2(pBs / TASA_USDT);           // cobro en USDT/divisas
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>
+          <span class="tipo-nombre">${t.nombre}</span>
+          <span class="tipo-tag">${t.origen === 'default' ? 'por defecto del tipo' : 'propio del producto'}</span>
+        </td>
+        <td class="bcv"><span class="pct-wrap"><input class="input-pct" data-i="${i}" data-k="bcv" value="${t.m}" inputmode="numeric"></span></td>
+        <td class="bcv"><span class="precio-calc">Bs ${fmt(pBs)}<small>≈ $ ${fmt(pUsd)}</small></span></td>
+        <td class="usdt sep-usdt"><span class="pct-wrap"><input class="input-pct" data-i="${i}" data-k="usdt" value="${t.m}" inputmode="numeric"></span></td>
+        <td class="usdt"><span class="precio-calc">${fmt(pUsdt)} USDT<small>≈ Bs ${fmt(pBs)}</small></span></td>`;
+      filas.appendChild(tr);
+    });
+    const dif = round2((TASA_USDT / TASA_BCV - 1) * 100);
+    document.getElementById('margenesHead').textContent =
+      `% Utilidad — Tasa BCV ${fmt(TASA_BCV)}bs — Tasa Binance ${fmt(TASA_USDT)}bs`;
+    document.getElementById('tasasInfo').textContent =
+      `Tasas del día — BCV: ${fmt(TASA_BCV)} Bs/$ · USDT Binance: ${fmt(TASA_USDT)} Bs/USDT · USDT está ${fmt(dif, 1)}% por encima de BCV`;
+  }
+
+  filas.addEventListener('input', (e) => {
+    const el = e.target;
+    if (!el.classList.contains('input-pct')) return;
+    tipos[el.dataset.i].m = parseNum(el.value);
+    tipos[el.dataset.i].origen = 'propio';
+    render();
+    const mismo = filas.querySelector(`input[data-i="${el.dataset.i}"][data-k="${el.dataset.k}"]`);
+    mismo.focus(); mismo.setSelectionRange(mismo.value.length, mismo.value.length);
+  });
+
+  costoInput.addEventListener('input', render);
+  render();
+</script>
+</body>
+</html>

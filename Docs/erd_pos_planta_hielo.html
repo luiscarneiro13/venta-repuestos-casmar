@@ -1,0 +1,165 @@
+<style>
+#erd svg.erDiagram .divider path { stroke-opacity: 0.5; }
+#erd svg.erDiagram .row-rect-odd path,
+#erd svg.erDiagram .row-rect-odd rect,
+#erd svg.erDiagram .row-rect-even path,
+#erd svg.erDiagram .row-rect-even rect { stroke: none !important; }
+</style>
+<div id="erd"></div>
+<script type="module">
+import mermaid from 'https://esm.sh/mermaid@11/dist/mermaid.esm.min.mjs';
+const themeMode = document.documentElement.dataset.mode;
+const dark = themeMode ? themeMode === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+await document.fonts.ready;
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'base',
+  fontFamily: '"anthropic-sans", sans-serif',
+  themeVariables: {
+    darkMode: dark,
+    fontSize: '13px',
+    fontFamily: '"anthropic-sans", sans-serif',
+    lineColor: dark ? '#9c9a92' : '#73726c',
+    textColor: dark ? '#c2c0b6' : '#3d3d3a',
+  },
+});
+const { svg } = await mermaid.render('erd-svg', `erDiagram
+  USUARIOS ||--o{ TASAS_CAMBIO : registra
+  USUARIOS ||--o{ VENTAS : atiende
+  TASAS_CAMBIO ||--o{ VENTAS : usada_en
+  PRODUCTOS ||--o{ PRECIOS : tiene
+  TIPOS_PRECIO ||--o{ PRECIOS : agrupa
+  PRECIOS ||--o{ VENTA_DETALLE : referencia
+  VENTAS ||--|{ VENTA_DETALLE : contiene
+  CLIENTES ||--o{ VENTAS : realiza
+  VENTAS ||--o{ PAGOS : recibe
+  VENTAS ||--o| CREDITOS : genera
+  CLIENTES ||--o{ CREDITOS : debe
+  CREDITOS ||--o{ PAGOS : abona
+  PRODUCTOS ||--o{ INVENTARIO_MOVIMIENTOS : mueve
+  USUARIOS ||--o{ INVENTARIO_MOVIMIENTOS : registra
+  VENTAS ||--o| INVENTARIO_MOVIMIENTOS : descuenta
+  USUARIOS ||--o{ CIERRES_CAJA : cierra
+
+  USUARIOS {
+    int id PK
+    string nombre
+    string usuario
+    string rol
+  }
+  TASAS_CAMBIO {
+    int id PK
+    decimal valor
+    datetime fecha_hora
+    int usuario_id FK
+  }
+  TIPOS_PRECIO {
+    int id PK
+    string nombre
+  }
+  PRODUCTOS {
+    int id PK
+    string nombre
+    string unidad_medida
+  }
+  PRECIOS {
+    int id PK
+    int producto_id FK
+    int tipo_precio_id FK
+    string codigo
+    decimal valor_usd
+    string tipo_pago
+    string descripcion
+  }
+  CLIENTES {
+    int id PK
+    string nombre
+    string numero_documento
+    string telefono
+    int dias_credito_default
+  }
+  VENTAS {
+    int id PK
+    string numero_ticket
+    int cliente_id FK
+    int usuario_id FK
+    string tipo_pago
+    decimal tasa_valor
+    decimal total_usd
+    decimal total_bs
+    string estado
+    datetime anulado_en
+    string anulado_motivo
+  }
+  VENTA_DETALLE {
+    int id PK
+    int venta_id FK
+    int precio_id FK
+    decimal cantidad
+    decimal subtotal_usd
+  }
+  PAGOS {
+    int id PK
+    int venta_id FK
+    int credito_id FK
+    string tipo
+    decimal monto_usd
+    string metodo_pago
+    decimal tasa_valor
+  }
+  CREDITOS {
+    int id PK
+    int venta_id FK
+    int cliente_id FK
+    decimal saldo_usd
+    decimal total_usd
+    date fecha_vencimiento
+    string estado
+  }
+  INVENTARIO_MOVIMIENTOS {
+    int id PK
+    int producto_id FK
+    string tipo
+    decimal cantidad
+    decimal saldo
+    string motivo
+    int venta_id FK
+    int usuario_id FK
+  }
+  CIERRES_CAJA {
+    int id PK
+    int usuario_id FK
+    decimal tasa_valor
+    datetime desde
+    datetime hasta
+    decimal total_contado_usd
+    decimal total_credito_usd
+    decimal total_cobrado_creditos_usd
+  }
+`);
+document.getElementById('erd').innerHTML = svg;
+
+document.querySelectorAll('#erd svg.erDiagram .node').forEach(node => {
+  const firstPath = node.querySelector('path[d]');
+  if (!firstPath) return;
+  const d = firstPath.getAttribute('d');
+  const nums = d.match(/-?[\d.]+/g)?.map(Number);
+  if (!nums || nums.length < 8) return;
+  const xs = [nums[0], nums[2], nums[4], nums[6]];
+  const ys = [nums[1], nums[3], nums[5], nums[7]];
+  const x = Math.min(...xs), y = Math.min(...ys);
+  const w = Math.max(...xs) - x, h = Math.max(...ys) - y;
+  const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  rect.setAttribute('x', x); rect.setAttribute('y', y);
+  rect.setAttribute('width', w); rect.setAttribute('height', h);
+  rect.setAttribute('rx', '8');
+  for (const a of ['fill', 'stroke', 'stroke-width', 'class', 'style']) {
+    if (firstPath.hasAttribute(a)) rect.setAttribute(a, firstPath.getAttribute(a));
+  }
+  firstPath.replaceWith(rect);
+});
+
+document.querySelectorAll('#erd svg.erDiagram .row-rect-odd path, #erd svg.erDiagram .row-rect-even path').forEach(p => {
+  p.setAttribute('stroke', 'none');
+});
+</script>

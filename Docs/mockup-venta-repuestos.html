@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mockup — Nueva venta (Repuestos)</title>
+<style>
+  @font-face {
+    font-family: 'Saira';
+    src: url('/src/renderer/src/assets/fonts/Saira-Variable.woff2') format('woff2-variations');
+    font-weight: 100 900;
+    font-style: normal;
+  }
+  :root {
+    --bg: #eef3f6;
+    --surface: #ffffff;
+    --surface-alt: #f6f9fa;
+    --primary: #0f5c78;
+    --primary-dark: #0a4155;
+    --primary-light: #e4eef2;
+    --accent: #e8912b;
+    --accent-light: #fbebd4;
+    --success: #2e7d53;
+    --success-light: #e3f1e9;
+    --danger: #b23a2e;
+    --danger-light: #f9e4e1;
+    --text-primary: #1c2933;
+    --text-secondary: #5c6b77;
+    --text-muted: #93a3ad;
+    --border: #dce4e9;
+    --radius: 8px;
+    --font: 'Saira', -apple-system, sans-serif;
+    --mono: 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font); background: var(--bg); color: var(--text-primary); font-size: 13px; line-height: 1.5; }
+  button { font-family: inherit; cursor: pointer; }
+  input { font-family: inherit; font-size: 13px; }
+
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .muted { color: var(--text-secondary); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+  .btn-primary { background: var(--primary); color: #fff; border: none; border-radius: var(--radius); padding: 9px 16px; font-size: 12.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .field-label { font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; display: block; }
+  .input { width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text-primary); }
+  .input:focus { outline: none; border-color: var(--primary); }
+
+  /* ---------- topbar ---------- */
+  .topbar { height: 58px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 22px; }
+  .topbar .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 14px; }
+  .topbar-right { display: flex; align-items: center; gap: 18px; }
+  .tasa-chip { display: flex; align-items: center; gap: 8px; background: var(--primary-light); border-radius: 100px; padding: 6px 14px; }
+  .tasa-chip .lbl { font-size: 10.5px; color: var(--primary-dark); font-weight: 600; }
+  .tasa-chip .val { font-family: var(--mono); font-weight: 600; font-size: 12.5px; color: var(--primary-dark); }
+  .caja-chip { display: flex; flex-direction: column; gap: 1px; background: var(--success-light); border-radius: 10px; padding: 5px 14px; line-height: 1.25; }
+  .caja-chip .lbl { font-size: 10.5px; color: var(--success); }
+  .caja-chip .fecha { font-size: 9.5px; color: var(--text-secondary); }
+  .user-chip { display: flex; align-items: center; gap: 8px; }
+  .user-chip .avatar { width: 30px; height: 30px; border-radius: 100px; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11.5px; }
+  .user-chip .info .name { font-size: 12px; font-weight: 600; line-height: 1.2; }
+  .user-chip .info .role { font-size: 10px; color: var(--text-secondary); }
+
+  .content { padding: 24px 28px; }
+  .view-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .view-header h1 { font-size: 18px; margin: 0; }
+  .view-header p { font-size: 12px; color: var(--text-secondary); margin: 3px 0 0; }
+
+  /* ---------- venta layout ---------- */
+  .venta-layout { display: grid; grid-template-columns: repeat(12, 1fr); gap: 20px; align-items: flex-start; }
+  .venta-ticket-col { grid-column: span 6; min-width: 0; }
+  .venta-productos-col { grid-column: span 6; min-width: 0; }
+
+  .cart-panel { padding: 16px; position: sticky; top: 0; }
+  .cart-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .cart-title h3 { font-size: 16px; margin: 0; }
+  .cart-item-header { display: flex; align-items: center; gap: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .cart-item-header .info { flex: 1; }
+  .cart-item-header .qty-label { width: 112px; text-align: center; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; }
+  .cart-item-header .subtotal-label { width: 140px; text-align: right; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; }
+  .cart-item-header .remove-spacer { width: 22px; }
+  .cart-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .cart-item.flash { animation: flash .5s; }
+  @keyframes flash { from { background: var(--primary-light); } to { background: transparent; } }
+  .cart-item .info { flex: 1; min-width: 0; }
+  .cart-item .info .name { font-size: 14px; font-weight: 600; }
+  .cart-item .info .tipo-precio-tag { display: inline-flex; align-items: center; gap: 4px; background: var(--primary-light); color: var(--primary-dark); border-radius: 100px; font-size: 10px; font-weight: 600; padding: 1px 8px; margin-left: 6px; vertical-align: middle; }
+  .cart-item .info .price { font-size: 12px; color: var(--text-secondary); font-family: var(--mono); margin-top: 1px; }
+  .qty-control { display: flex; align-items: center; gap: 4px; }
+  .qty-btn { width: 32px; height: 32px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface-alt); font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+  .qty-input { width: 48px; height: 32px; text-align: center; border: 1px solid var(--border); border-radius: 5px; font-family: var(--mono); font-size: 14px; font-weight: 600; }
+  .cart-item .remove { width: 32px; height: 32px; color: var(--danger); font-size: 16px; border: 1px solid var(--danger); border-radius: 5px; background: transparent; display: flex; align-items: center; justify-content: center; }
+  .cart-totals { padding-top: 12px; font-size: 14px; }
+  .cart-totals .row { display: flex; justify-content: space-between; padding: 4px 0; }
+  .cart-totals .row.total { font-weight: 700; font-size: 18px; padding-top: 8px; margin-top: 4px; border-top: 1px solid var(--border); }
+  .finalizar-btn { width: 100%; justify-content: center; padding: 12px; font-size: 13px; margin-top: 16px; }
+
+  .cliente-input { display: flex; align-items: center; gap: 8px; }
+  .cliente-input .doc { font-size: 10.5px; color: var(--text-secondary); }
+
+  /* ---------- combobox de producto ---------- */
+  .combobox { position: relative; }
+  .combobox .icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 14px; }
+  .buscador { padding-left: 32px; }
+  .combobox-dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 10px 24px rgba(0,0,0,.14); max-height: 260px; overflow-y: auto; z-index: 30; }
+  .combobox-item { padding: 9px 12px; font-size: 12px; cursor: pointer; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .combobox-item:last-child { border-bottom: none; }
+  .combobox-item:hover { background: var(--primary-light); }
+  .combobox-item .pd .pn { font-weight: 600; font-size: 12.5px; }
+  .combobox-item .pd .pm { font-size: 10.5px; color: var(--text-secondary); margin-top: 1px; }
+  .combobox-item .stock { font-size: 10px; font-weight: 600; color: var(--success); background: var(--success-light); padding: 2px 8px; border-radius: 100px; white-space: nowrap; }
+  .combobox-item .stock.bajo { color: var(--danger); background: var(--danger-light); }
+  .combobox-item.empty { justify-content: center; color: var(--text-muted); cursor: default; }
+  .combobox-item.empty:hover { background: var(--surface); }
+
+  /* ---------- producto seleccionado + sus precios ---------- */
+  .sel-producto { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 14px 0 10px; }
+  .sel-producto .datos .pnombre { font-size: 15px; font-weight: 700; }
+  .sel-producto .datos .pmeta { font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
+  .sel-producto .datos .pmeta .stock { color: var(--success); font-weight: 600; }
+  .sel-producto .quitar { background: transparent; border: 1px solid var(--border); color: var(--text-secondary); border-radius: 100px; padding: 5px 11px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .sel-producto .quitar:hover { border-color: var(--danger); color: var(--danger); }
+
+  .price-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .price-card { padding: 14px; text-align: left; transition: border-color .15s, background .15s; width: 100%; }
+  .price-card .code { font-size: 10.5px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: .03em; }
+  .price-card .amounts { display: flex; align-items: baseline; gap: 7px; margin: 6px 0 8px; }
+  .price-card .usd { font-family: var(--mono); font-size: 18px; font-weight: 600; }
+  .price-card .bs { font-family: var(--mono); font-size: 11px; color: var(--text-secondary); }
+  .price-card .desc { font-size: 10.5px; color: var(--text-secondary); line-height: 1.4; min-height: 32px; }
+  .price-card:hover { border-color: var(--primary); }
+  .price-card.selected { border-color: var(--primary); background: var(--primary-light); }
+  .price-card .en-ticket { display: none; font-size: 10px; font-weight: 700; color: var(--primary-dark); background: #fff; border: 1px solid var(--primary); border-radius: 100px; padding: 1px 8px; margin-top: 8px; }
+  .price-card.selected .en-ticket { display: inline-block; }
+
+  .estado-vacio { text-align: center; padding: 40px 16px; color: var(--text-muted); font-size: 13px; border: 1px dashed var(--border); border-radius: 12px; margin-top: 14px; }
+
+  /* ---------- anotaciones del mockup ---------- */
+  .hint-badge { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 100px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+  .hint-float { position: absolute; top: -9px; right: -9px; z-index: 40; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+  .mockup-note { max-width: 1100px; margin: 28px auto; padding: 0 28px 40px; }
+  .mockup-note .card { padding: 18px 22px; }
+  .mockup-note h2 { font-size: 14px; margin: 0 0 10px; }
+  .mockup-note ul { margin: 0; padding-left: 18px; }
+  .mockup-note li { font-size: 12px; color: var(--text-secondary); margin: 5px 0; }
+  .mockup-note li b { color: var(--text-primary); }
+  .has-hint { position: relative; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- ============================ TOPBAR ============================ -->
+<div class="topbar">
+  <div class="brand">
+    <div style="width:30px;height:30px;border-radius:8px;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">VR</div>
+    Venta Repuestos S.A.
+  </div>
+  <div class="topbar-right">
+    <div class="tasa-chip"><span class="lbl">Tasa del día</span><span class="val">420,50 Bs</span></div>
+    <div class="caja-chip"><span class="lbl"><strong>Caja abierta</strong></span><span class="fecha">desde 08:03 a. m.</span></div>
+    <div class="user-chip">
+      <div class="avatar">AD</div>
+      <div class="info"><div class="name">Admin</div><div class="role">administrador</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="content">
+  <div class="view-header">
+    <div>
+      <h1>Nueva venta</h1>
+      <p>Busca un producto y elige cuál de sus precios aplica a este cliente.</p>
+    </div>
+  </div>
+
+  <div class="venta-layout">
+    <!-- ============================ TICKET ============================ -->
+    <div class="venta-ticket-col">
+      <div class="card cart-panel">
+        <div style="margin-bottom:16px">
+          <label class="field-label">Cliente *</label>
+          <div class="input cliente-input">
+            <span style="font-weight:600">Autoservicio El Rápido C.A.</span>
+            <span class="doc num">J-30512345-6</span>
+          </div>
+        </div>
+
+        <div class="cart-title">
+          <h3>Ticket actual</h3>
+          <span class="muted" id="ticket-count" style="font-size:11px">2 items</span>
+        </div>
+
+        <div class="cart-item-header">
+          <span class="remove-spacer"></span><span class="info"></span>
+          <span class="qty-label">Cantidad</span>
+          <span class="subtotal-label">Subtotal</span>
+        </div>
+
+        <div id="ticket-items">
+          <div class="cart-item">
+            <button class="remove" title="Quitar">×</button>
+            <div class="info">
+              <div class="name">Pastillas de freno Aveo<span class="tipo-precio-tag">Detal</span></div>
+              <div class="price">$12,50 &nbsp;·&nbsp; Bs 5.256,25 c/u</div>
+            </div>
+            <div class="qty-control">
+              <button class="qty-btn">−</button>
+              <input class="qty-input" value="2" readonly />
+              <button class="qty-btn">+</button>
+            </div>
+            <div class="num" style="width:140px;text-align:right;font-weight:600;font-size:14px">Bs 10.512,50</div>
+          </div>
+
+          <div class="cart-item">
+            <button class="remove" title="Quitar">×</button>
+            <div class="info">
+              <div class="name">Bujía NGK BKR5E-11<span class="tipo-precio-tag">Mayor</span></div>
+              <div class="price">$2,80 &nbsp;·&nbsp; Bs 1.177,40 c/u</div>
+            </div>
+            <div class="qty-control">
+              <button class="qty-btn">−</button>
+              <input class="qty-input" value="4" readonly />
+              <button class="qty-btn">+</button>
+            </div>
+            <div class="num" style="width:140px;text-align:right;font-weight:600;font-size:14px">Bs 4.709,60</div>
+          </div>
+        </div>
+
+        <div class="cart-totals">
+          <div class="row"><span>Subtotal <span class="muted" id="sub-usd" style="display:block;font-size:10.5px">($36,20)</span></span><span class="num" id="sub-bs">Bs 15.222,10</span></div>
+          <div class="row total"><span>Total <span class="muted" id="total-usd" style="display:block;font-size:10.5px;font-weight:400">($36,20)</span></span><span class="num" id="total-bs">Bs 15.222,10</span></div>
+        </div>
+
+        <button class="btn-primary finalizar-btn">Finalizar venta</button>
+      </div>
+    </div>
+
+    <!-- ============================ COLUMNA DERECHA ============================ -->
+    <div class="venta-productos-col">
+
+      <!-- Estado inicial: SOLO el buscador -->
+      <div class="combobox has-hint">
+        <span class="hint-badge hint-float">1</span>
+        <span class="icon">⌕</span>
+        <input class="input buscador" id="buscador" placeholder="Buscar producto por nombre, código o marca…" autocomplete="off" />
+        <div class="combobox-dropdown hidden" id="dropdown"></div>
+      </div>
+
+      <!-- Estado vacío (hasta que se elija un producto) -->
+      <div class="estado-vacio" id="estado-vacio">
+        Busca un producto en el campo de arriba para ver sus precios.<br />
+        <span style="font-size:11px">Prueba escribir «filtro», «freno» o «bujía».</span>
+      </div>
+
+      <!-- Al seleccionar producto: aparecen sus cards de precios debajo del buscador -->
+      <div id="zona-precios" class="hidden has-hint">
+        <span class="hint-badge hint-float">3</span>
+        <div class="sel-producto">
+          <div class="datos">
+            <div class="pnombre" id="ph-nombre"></div>
+            <div class="pmeta" id="ph-meta"></div>
+          </div>
+          <button class="quitar" id="btn-quitar">× Quitar</button>
+        </div>
+        <div class="price-grid" id="grid-precios"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ============================ NOTAS ============================ -->
+<div class="mockup-note">
+  <div class="card">
+    <h2>Flujo de la nueva pantalla (es interactivo: pruébalo)</h2>
+    <ul>
+      <li><b>Estado inicial:</b> solo el buscador <b><span class="hint-badge" style="width:16px;height:16px;font-size:9px;margin-right:4px">1</span></b> — no hay grilla fija. Las pestañas "Planta hielo / Calle" y la restricción de mezclar categorías desaparecen.</li>
+      <li><b>Al escribir</b> <b><span class="hint-badge" style="width:16px;height:16px;font-size:9px;margin-right:4px">2</span></b> se despliega la lista de productos que coinciden (por nombre, código o marca), cada uno con su stock. Se selecciona uno.</li>
+      <li><b>Producto seleccionado</b> <b><span class="hint-badge" style="width:16px;height:16px;font-size:9px;margin-right:4px">3</span></b>: debajo del buscador aparecen sus cards de precios (nombre, USD, equivalente en Bs y condición). Click en una card → la línea «Producto · Tipo de precio» entra al ticket; click de nuevo la quita. «× Quitar» libera la selección para buscar otro producto.</li>
+      <li>El resto del flujo se mantiene idéntico: combobox de cliente (con crear-nuevo), totales USD/Bs, vista previa del ticket, impresión de 2 copias y modal de error de impresión.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+  const TASA = 420.50
+
+  const productos = [
+    { sku: 'FO-1089', nombre: 'Filtro de aceite Corolla 2009–2018', marca: 'Fram · Filtros', stock: 14,
+      precios: [
+        { tipo: 'Detal', usd: 8.00, nota: 'Venta al público' },
+        { tipo: 'Mayor', usd: 7.20, nota: 'A partir de 6 unidades' },
+        { tipo: 'Taller', usd: 7.60, nota: 'Talleres afiliados' },
+        { tipo: 'Cliente frecuente', usd: 6.90, nota: 'Con credencial de cliente fijo' }
+      ] },
+    { sku: 'PF-2041', nombre: 'Pastillas de freno delanteras Aveo', marca: 'ACDelco · Frenos', stock: 8,
+      precios: [
+        { tipo: 'Detal', usd: 12.50, nota: 'Venta al público' },
+        { tipo: 'Mayor', usd: 11.00, nota: 'A partir de 4 unidades' },
+        { tipo: 'Taller', usd: 11.80, nota: 'Talleres afiliados' }
+      ] },
+    { sku: 'BJ-0017', nombre: 'Bujía NGK BKR5E-11', marca: 'NGK · Encendido', stock: 42,
+      precios: [
+        { tipo: 'Detal', usd: 3.20, nota: 'Venta al público' },
+        { tipo: 'Mayor', usd: 2.80, nota: 'A partir de 10 unidades' }
+      ] },
+    { sku: 'CD-5520', nombre: 'Correa de distribución Hilux 2.7', marca: 'Gates · Correas', stock: 2,
+      precios: [
+        { tipo: 'Detal', usd: 22.00, nota: 'Venta al público' },
+        { tipo: 'Mayor', usd: 18.50, nota: 'A partir de 3 unidades' },
+        { tipo: 'Taller', usd: 20.00, nota: 'Talleres afiliados' },
+        { tipo: 'Cliente frecuente', usd: 19.00, nota: 'Con credencial de cliente fijo' }
+      ] },
+    { sku: 'AM-3301', nombre: 'Amortiguador delantero Corolla', marca: 'Monroe · Suspensión', stock: 6,
+      precios: [
+        { tipo: 'Detal', usd: 35.00, nota: 'Venta al público' },
+        { tipo: 'Mayor', usd: 31.00, nota: 'A partir de 4 unidades' },
+        { tipo: 'Taller', usd: 33.00, nota: 'Talleres afiliados' }
+      ] },
+    { sku: 'FA-8120', nombre: 'Filtro de aire Silverado 5.3', marca: 'Fram · Filtros', stock: 11,
+      precios: [
+        { tipo: 'Detal', usd: 10.80, nota: 'Venta al público' },
+        { tipo: 'Mayor', usd: 9.50, nota: 'A partir de 6 unidades' }
+      ] }
+  ]
+
+  const fmtUsd = (v) => '$' + v.toFixed(2).replace('.', ',')
+  const fmtBs = (v) => 'Bs ' + (v * TASA).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+  const buscador = document.getElementById('buscador')
+  const dropdown = document.getElementById('dropdown')
+  const estadoVacio = document.getElementById('estado-vacio')
+  const zonaPrecios = document.getElementById('zona-precios')
+
+  let productoActivo = null
+  const enTicket = new Set()
+  let totalUsd = 36.20
+  const itemsBase = 2
+
+  // ---------- dropdown de búsqueda ----------
+  function renderDropdown(q) {
+    dropdown.innerHTML = ''
+    const texto = (q || '').toLowerCase().trim()
+    if (!texto) { dropdown.classList.add('hidden'); return }
+    const visibles = productos.filter(p =>
+      p.nombre.toLowerCase().includes(texto) ||
+      p.sku.toLowerCase().includes(texto) ||
+      p.marca.toLowerCase().includes(texto))
+    dropdown.classList.remove('hidden')
+    if (!visibles.length) {
+      dropdown.innerHTML = '<div class="combobox-item empty">No se encontró «' + q + '»</div>'
+      return
+    }
+    for (const p of visibles) {
+      const usdMin = Math.min(...p.precios.map(x => x.usd))
+      const usdMax = Math.max(...p.precios.map(x => x.usd))
+      const item = document.createElement('div')
+      item.className = 'combobox-item'
+      item.innerHTML =
+        '<div class="pd"><div class="pn">' + p.nombre + '</div>' +
+        '<div class="pm">' + p.sku + ' · ' + p.marca + ' · ' + p.precios.length + ' precios (' + fmtUsd(usdMin) + ' – ' + fmtUsd(usdMax) + ')</div></div>' +
+        '<span class="stock' + (p.stock <= 2 ? ' bajo' : '') + '">' + p.stock + ' disp.</span>'
+      item.addEventListener('mousedown', () => seleccionarProducto(p))
+      dropdown.appendChild(item)
+    }
+  }
+
+  buscador.addEventListener('input', () => renderDropdown(buscador.value))
+  buscador.addEventListener('focus', () => renderDropdown(buscador.value))
+  buscador.addEventListener('blur', () => dropdown.classList.add('hidden'))
+
+  // ---------- seleccionar / quitar producto ----------
+  function seleccionarProducto(p) {
+    productoActivo = p
+    buscador.value = p.nombre
+    dropdown.classList.add('hidden')
+    estadoVacio.classList.add('hidden')
+    zonaPrecios.classList.remove('hidden')
+    document.getElementById('ph-nombre').textContent = p.nombre
+    document.getElementById('ph-meta').innerHTML =
+      p.sku + ' · ' + p.marca + ' · <span class="stock">' + p.stock + ' disponibles</span>'
+    renderPrecios(p)
+  }
+
+  function quitarProducto() {
+    productoActivo = null
+    buscador.value = ''
+    zonaPrecios.classList.add('hidden')
+    estadoVacio.classList.remove('hidden')
+    buscador.focus()
+  }
+
+  document.getElementById('btn-quitar').addEventListener('click', quitarProducto)
+
+  // ---------- cards de precio del producto seleccionado ----------
+  function renderPrecios(p) {
+    const grid = document.getElementById('grid-precios')
+    grid.innerHTML = ''
+    for (const pr of p.precios) {
+      const key = p.sku + '|' + pr.tipo
+      const card = document.createElement('button')
+      card.className = 'card price-card' + (enTicket.has(key) ? ' selected' : '')
+      card.innerHTML =
+        '<div class="code">' + pr.tipo + '</div>' +
+        '<div class="amounts"><span class="usd">' + fmtUsd(pr.usd) + '</span>' +
+        '<span class="bs">' + fmtBs(pr.usd) + '</span></div>' +
+        '<div class="desc">' + pr.nota + '</div>' +
+        '<span class="en-ticket">✓ en el ticket</span>'
+      card.addEventListener('click', () => togglePrecio(p, pr, card))
+      grid.appendChild(card)
+    }
+  }
+
+  // ---------- agregar / quitar del ticket ----------
+  function togglePrecio(p, pr, card) {
+    const key = p.sku + '|' + pr.tipo
+    const existente = document.querySelector('.cart-item[data-key="' + key + '"]')
+    if (existente) {
+      existente.remove()
+      enTicket.delete(key)
+      totalUsd -= pr.usd
+      card.classList.remove('selected')
+      recalcular()
+      return
+    }
+    enTicket.add(key)
+    card.classList.add('selected')
+    totalUsd += pr.usd
+
+    const linea = document.createElement('div')
+    linea.className = 'cart-item flash'
+    linea.setAttribute('data-key', key)
+    linea.innerHTML =
+      '<button class="remove" title="Quitar">×</button>' +
+      '<div class="info">' +
+        '<div class="name">' + p.nombre + '<span class="tipo-precio-tag">' + pr.tipo + '</span></div>' +
+        '<div class="price">' + fmtUsd(pr.usd) + ' &nbsp;·&nbsp; ' + fmtBs(pr.usd) + ' c/u</div>' +
+      '</div>' +
+      '<div class="qty-control">' +
+        '<button class="qty-btn" disabled>−</button>' +
+        '<input class="qty-input" value="1" readonly />' +
+        '<button class="qty-btn">+</button>' +
+      '</div>' +
+      '<div class="num" style="width:140px;text-align:right;font-weight:600;font-size:14px">' + fmtBs(pr.usd) + '</div>'
+    linea.querySelector('.remove').addEventListener('click', () => {
+      linea.remove()
+      enTicket.delete(key)
+      totalUsd -= pr.usd
+      card.classList.remove('selected')
+      recalcular()
+    })
+    document.getElementById('ticket-items').appendChild(linea)
+    recalcular()
+  }
+
+  function recalcular() {
+    document.getElementById('ticket-count').textContent = (itemsBase + enTicket.size) + ' items'
+    document.getElementById('sub-usd').textContent = '(' + fmtUsd(totalUsd) + ')'
+    document.getElementById('total-usd').textContent = '(' + fmtUsd(totalUsd) + ')'
+    document.getElementById('sub-bs').textContent = fmtBs(totalUsd)
+    document.getElementById('total-bs').textContent = fmtBs(totalUsd)
+  }
+</script>
+</body>
+</html>
