@@ -2,7 +2,7 @@ appId: com.ventarepuestos.pos
 productName: Venta de Repuestos
 directories:
   buildResources: build
-  output: release
+  output: ../compilaciones
 files:
   - '!**/.vscode/*'
   - '!src/*'

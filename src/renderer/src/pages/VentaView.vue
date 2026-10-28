@@ -261,6 +261,7 @@ import ProductoCombobox from '../components/ProductoCombobox.vue'
 import SearchSelect from '../components/SearchSelect.vue'
 import { formatMontoBs, formatMontoUsdt } from '../composables/useFormato'
 import { mensajeError } from '../composables/useErrores'
+import { alCambiar } from '../composables/useEventos'
 import { calcularLinea, calcularTotales } from '../../../shared/venta.calculo.js'
 import { session } from '../store/session'
 import logoUrl from '../assets/logo.png'
@@ -616,6 +617,20 @@ async function imprimirYCerrar() {
 }
 
 onMounted(cargarTodo)
+// Refresco en vivo: si otra PC vende/cambia catálogo/tasas, se recargan los
+// productos y los precios del ticket sin tocar el estado de carga.
+alCambiar(['ventas', 'catalogo', 'inventario', 'tasas'], () => cargarCatalogo().catch(() => {}))
+alCambiar('clientes', async () => {
+  try {
+    clientes.value = await window.api.clientes.listar()
+  } catch { /* offline: se reintenta con el próximo evento */ }
+})
+alCambiar('config', async () => {
+  try {
+    ivaConfigurado.value = await window.api.configuracion.obtenerIva()
+  } catch { }
+})
+
 </script>
 
 <style scoped>

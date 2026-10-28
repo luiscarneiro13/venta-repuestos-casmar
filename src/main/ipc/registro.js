@@ -1,5 +1,6 @@
 import { ipcMain } from '../electron-safe.js'
 import { contextoRemoto } from './contexto.js'
+import { conEvento } from '../eventos.js'
 
 // Registro único de canales: cada *.ipc.js declara sus handlers con
 // registrar() en vez de ipcMain.handle(). Con ese mapa, instalarIpc() los
@@ -21,10 +22,10 @@ export function reemplazar(canal, handler) {
 export function ejecutarCanal(canal, args = [], usuarioRemoto = null) {
   const handler = canales.get(canal)
   if (!handler) throw new Error(`Canal desconocido: ${canal}`)
-  if (usuarioRemoto) {
-    return contextoRemoto.run({ usuario: usuarioRemoto }, () => handler({}, ...args))
-  }
-  return handler({}, ...args)
+  const resultado = usuarioRemoto
+    ? contextoRemoto.run({ usuario: usuarioRemoto }, () => handler({}, ...args))
+    : handler({}, ...args)
+  return conEvento(canal, resultado)
 }
 
 export const listarCanales = () => [...canales.keys()]
@@ -37,6 +38,6 @@ export const limpiarCanales = () => canales.clear()
 // solo se llama dentro de ella; los tests usan registrar/ejecutarCanal.
 export function instalarIpc() {
   for (const [canal, handler] of canales) {
-    ipcMain.handle(canal, (event, ...args) => handler(event, ...args))
+    ipcMain.handle(canal, (event, ...args) => conEvento(canal, handler(event, ...args)))
   }
 }

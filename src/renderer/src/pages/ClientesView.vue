@@ -77,6 +77,7 @@ import BackLink from '../components/BackLink.vue'
 import BaseModal from '../components/BaseModal.vue'
 import SearchSelect from '../components/SearchSelect.vue'
 import { exportarCsv } from '../composables/useExportarCsv'
+import { alCambiar } from '../composables/useEventos'
 
 const clientes = ref([])
 const cargando = ref(true)
@@ -162,4 +163,6 @@ function exportarExcel() {
 }
 
 onMounted(cargarClientes)
+alCambiar(['clientes', 'ventas'], () => cargarClientes().catch(() => {}))
+
 </script>

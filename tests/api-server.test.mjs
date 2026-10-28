@@ -165,3 +165,68 @@ test('los canales registrados incluyen los de datos para imprimir en el esclavo'
     assert.ok(listarCanales().includes(canal), canal)
   }
 })
+
+const wsBase = () => base.replace(/^http/, 'ws')
+
+const wsAbierto = async (token) => {
+  const ws = new WebSocket(`${wsBase()}/ws?token=${token}`)
+  await new Promise((resolve, reject) => {
+    ws.onopen = resolve
+    ws.onerror = () => reject(new Error('WebSocket rechazado'))
+  })
+  return ws
+}
+
+const proximoEvento = (ws) => new Promise((resolve, reject) => {
+  const timer = setTimeout(() => reject(new Error('No llegó ningún evento')), 3000)
+  ws.onmessage = (e) => {
+    clearTimeout(timer)
+    resolve(JSON.parse(e.data))
+  }
+})
+
+test('websocket: exige token válido', async () => {
+  await levantar()
+  const ws = new WebSocket(`${wsBase()}/ws?token=falso`)
+  const resultado = await new Promise((resolve) => {
+    ws.onopen = () => resolve('abierto')
+    ws.onerror = () => resolve('rechazado')
+    ws.onclose = () => resolve('rechazado')
+  })
+  assert.equal(resultado, 'rechazado')
+})
+
+test('websocket: el esclavo recibe el evento de cada escritura remota o local', async () => {
+  await levantar()
+  login({ usuario: 'admin', password: 'admin123' })
+  const { token } = await loginHttp('admin', 'admin123')
+  const ws = await wsAbierto(token)
+
+  // Escritura por invoke HTTP → evento 'clientes'.
+  let espera = proximoEvento(ws)
+  await post('/api/invoke', { canal: 'clientes:crear', args: [{ nombre: 'Remoto' }] }, token)
+  assert.equal((await espera).tipo, 'clientes')
+
+  // Escritura local del servidor (su propia ventana, vía ejecutarCanal) →
+  // también llega al esclavo, con su grupo ('proveedores').
+  espera = proximoEvento(ws)
+  await ejecutarCanal('proveedores:crear', [{ nombre: 'Local' }])
+  assert.equal((await espera).tipo, 'proveedores')
+  ws.close()
+})
+
+test('las lecturas y los errores no emiten eventos', async () => {
+  await levantar()
+  login({ usuario: 'admin', password: 'admin123' })
+  const { token } = await loginHttp('admin', 'admin123')
+  const ws = await wsAbierto(token)
+
+  // Lectura + escritura que falla (venta inexistente) no emiten; el primer
+  // evento que llega debe ser el del cliente creado, no otro.
+  const espera = proximoEvento(ws)
+  await post('/api/invoke', { canal: 'clientes:listar', args: [] }, token)
+  await post('/api/invoke', { canal: 'ventas:anular', args: [999] }, token)
+  await post('/api/invoke', { canal: 'clientes:crear', args: [{ nombre: 'Ok' }] }, token)
+  assert.equal((await espera).tipo, 'clientes')
+  ws.close()
+})

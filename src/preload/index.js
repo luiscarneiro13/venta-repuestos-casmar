@@ -117,6 +117,15 @@ const api = {
     probar: (datos) => ipcRenderer.invoke('appConfig:probar', datos),
     reiniciar: () => ipcRenderer.invoke('appConfig:reiniciar')
   },
+  eventos: {
+    // Refresco en vivo (WebSocket del esclavo / emisión local del servidor).
+    // Devuelve una función para quitar la suscripción.
+    on: (callback) => {
+      const listener = (_event, payload) => callback(payload)
+      ipcRenderer.on('evento:remoto', listener)
+      return () => ipcRenderer.removeListener('evento:remoto', listener)
+    }
+  },
   sistema: {
     version: () => ipcRenderer.invoke('sistema:version'),
     verificarAdmin: (password) => ipcRenderer.invoke('sistema:verificarAdmin', password),

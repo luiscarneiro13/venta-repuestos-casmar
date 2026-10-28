@@ -1,6 +1,8 @@
 import { createServer } from 'node:http'
 import { ejecutarCanal } from '../ipc/registro.js'
 import { loginConToken, logoutToken, usuarioDeToken } from '../services/auth.service.js'
+import { setDifusor } from '../eventos.js'
+import { adjuntarWebSocket, difundirEvento } from './ws.server.js'
 
 // API HTTP local del equipo "principal": las PCs esclavas llaman
 //   GET  /api/health          sin auth, para "Probar conexión"
@@ -91,6 +93,8 @@ export function iniciarApiServidor({ puerto, version = 'dev', onListen } = {}) {
       } catch { /* respuesta ya enviada */ }
     })
   })
+  adjuntarWebSocket(server)
+  setDifusor(difundirEvento)
   server.listen(puerto, '0.0.0.0', () => {
     console.log(`[api] Escuchando en 0.0.0.0:${server.address().port}`)
     onListen?.(server.address().port)

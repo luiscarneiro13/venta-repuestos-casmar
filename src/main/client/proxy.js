@@ -1,11 +1,13 @@
 import { obtenerConfig } from '../config.js'
 import { setSesionCliente, getSesionCliente } from '../services/auth.service.js'
+import { BrowserWindow } from '../electron-safe.js'
 
 // Lado esclavo: cada canal remoto sale por HTTP al servidor. El token de la
 // sesión vive en auth.service (sesionCliente) y se adjunta solo: el renderer
 // nunca lo ve. Sin vencimiento (red local).
 
 const TIMEOUT = 8000
+const REINTENTO_WS = 5000
 
 const base = () => {
   const cfg = obtenerConfig()
@@ -39,16 +41,75 @@ async function post(ruta, cuerpo, token = null) {
   return datos
 }
 
+// WebSocket de eventos: el esclavo escucha /ws?token=... y reenvía cada
+// evento a sus ventanas ('evento:remoto'), para refresco en vivo. Reintenta
+// mientras haya sesión (el servidor pudo reiniciarse o caer la red).
+let ws = null
+let reintentoWs = null
+
+function avisarVentanas(payload) {
+  try {
+    for (const w of BrowserWindow?.getAllWindows?.() ?? []) {
+      if (!w.isDestroyed()) w.webContents.send('evento:remoto', payload)
+    }
+  } catch { /* sin ventanas todavía */ }
+}
+
+function conectarEventos() {
+  const sesion = getSesionCliente()
+  if (!sesion?.token || ws) return
+  let socket
+  try {
+    socket = new WebSocket(`${base().replace(/^http/, 'ws')}/ws?token=${sesion.token}`)
+  } catch {
+    return
+  }
+  ws = socket
+  socket.onmessage = (e) => {
+    try {
+      avisarVentanas(JSON.parse(e.data))
+    } catch { /* mensaje inválido: se ignora */ }
+  }
+  socket.onclose = () => {
+    ws = null
+    if (getSesionCliente()?.token && !reintentoWs) {
+      reintentoWs = setTimeout(() => {
+        reintentoWs = null
+        conectarEventos()
+      }, REINTENTO_WS)
+      reintentoWs.unref?.()
+    }
+  }
+  socket.onerror = () => {
+    try {
+      socket.close()
+    } catch { /* ya cerrado */ }
+  }
+}
+
+function desconectarEventos() {
+  if (reintentoWs) {
+    clearTimeout(reintentoWs)
+    reintentoWs = null
+  }
+  try {
+    ws?.close()
+  } catch { /* ya cerrado */ }
+  ws = null
+}
+
 // Login del esclavo: guarda {usuario, token} en la sesión cliente y devuelve
 // el usuario (mismo contrato que auth:login local).
 export async function loginCliente(credenciales) {
   const { usuario, token } = await post('/api/login', credenciales)
   setSesionCliente({ usuario, token })
+  conectarEventos()
   return usuario
 }
 
 export async function logoutCliente() {
   const sesion = getSesionCliente()
+  desconectarEventos()
   if (sesion?.token) {
     try {
       await post('/api/logout', { token: sesion.token })

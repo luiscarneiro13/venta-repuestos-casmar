@@ -68,6 +68,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { alCambiar } from '../composables/useEventos'
 import { useRouter } from 'vue-router'
 import SearchSelect from '../components/SearchSelect.vue'
 import { formatUsd, formatMontoBs } from '../composables/useFormato'
@@ -104,6 +105,8 @@ function verGrafico(cliente) {
 }
 
 onMounted(cargarClientes)
+alCambiar(['ventas', 'clientes'], () => cargarClientes().catch(() => {}))
+
 </script>
 
 <style scoped>

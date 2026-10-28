@@ -207,6 +207,7 @@ import { session } from '../store/session'
 import { exportarInventario } from '../composables/useExportarInventario'
 import { formatFechaHoraUtc } from '../composables/useFormato'
 import { mensajeError } from '../composables/useErrores'
+import { alCambiar } from '../composables/useEventos'
 
 const route = useRoute()
 
@@ -371,6 +372,8 @@ async function aplicarProductoDeRuta() {
   if (!id || !productos.value.some((p) => p.id === id)) return
   await seleccionar(id)
 }
+
+alCambiar(['catalogo', 'inventario', 'proveedores', 'tasas'], () => recargar().catch(() => {}))
 
 onMounted(async () => {
   await recargar()

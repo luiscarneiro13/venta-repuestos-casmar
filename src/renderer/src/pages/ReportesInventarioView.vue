@@ -174,6 +174,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import { alCambiar } from '../composables/useEventos'
 import KpiCard from '../components/KpiCard.vue'
 import SearchSelect from '../components/SearchSelect.vue'
 import { formatUsd, formatMontoBs } from '../composables/useFormato'
@@ -300,6 +301,8 @@ function exportarExcel() {
 }
 
 onMounted(cargar)
+alCambiar(['catalogo', 'inventario', 'tasas'], () => cargar().catch(() => {}))
+
 </script>
 
 <style scoped>

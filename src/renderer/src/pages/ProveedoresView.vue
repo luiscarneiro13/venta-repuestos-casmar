@@ -57,6 +57,7 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
+import { alCambiar } from '../composables/useEventos'
 import BackLink from '../components/BackLink.vue'
 import ProveedorModal from '../components/ProveedorModal.vue'
 import ConfirmModal from '../components/ConfirmModal.vue'
@@ -113,6 +114,8 @@ async function reactivar(proveedor) {
 }
 
 onMounted(cargar)
+alCambiar(['proveedores', 'catalogo'], () => cargar().catch(() => {}))
+
 </script>
 
 <style scoped>

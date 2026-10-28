@@ -100,6 +100,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import { alCambiar } from '../composables/useEventos'
 import { ROLES_ASIGNABLES, nombreRol } from '../../../shared/permisos.js'
 import { session } from '../store/session'
 import { mensajeError } from '../composables/useErrores'
@@ -216,4 +217,6 @@ async function confirmarEliminar() {
 }
 
 onMounted(cargarUsuarios)
+alCambiar('usuarios', () => cargarUsuarios().catch(() => {}))
+
 </script>

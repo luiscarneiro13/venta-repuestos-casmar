@@ -184,6 +184,7 @@
 <script setup>
 import { puedeHacer } from '../composables/usePermisos'
 import { computed, onMounted, reactive, ref } from 'vue'
+import { alCambiar } from '../composables/useEventos'
 import BaseModal from '../components/BaseModal.vue'
 import ConfirmModal from '../components/ConfirmModal.vue'
 import KpiCard from '../components/KpiCard.vue'
@@ -348,6 +349,8 @@ function exportarExcel() {
 }
 
 onMounted(cargarVentas)
+alCambiar('ventas', () => cargarVentas().catch(() => {}))
+
 </script>
 
 <style scoped>

@@ -246,12 +246,24 @@ HTTP dentro de la LAN. La BD nunca se comparte como archivo (nada de SMB).
 - **Imports de Electron**: los módulos que se cargan también en tests o en
   modo esclavo importan de `main/electron-safe.js` (destructuring seguro
   sobre el CJS real), nunca `import { x } from 'electron'` directo.
+- **Refresco en vivo (WebSocket)**: `server/ws.server.js` es un RFC 6455
+  mínimo sin dependencias sobre el mismo puerto HTTP (`GET /ws?token=...`,
+  rechaza tokens inválidos). `eventos.js` mapea cada canal de escritura a un
+  grupo (`ventas`, `inventario`, `catalogo`, `clientes`, `proveedores`,
+  `usuarios`, `tasas`, `caja`, `config`, `todo`); `registro.js` envuelve los
+  handlers con `conEvento`, así **cualquier escritura exitosa — local o por
+  invoke — difunde el evento** a esclavos y a la ventana del servidor
+  (`webContents.send('evento:remoto')`). El esclavo se conecta tras el login
+  (`client/proxy.js`, `WebSocket` global de Node, reintento cada 5 s con
+  sesión viva). En el renderer: `api.eventos.on(cb)` + composable
+  `alCambiar(tipos, cb)` (`useEventos.js`); las vistas se recargan sin tocar
+  su estado (en VentaView solo `cargarCatalogo`, nunca el carrito).
+- **Caja compartida**: una sola caja del día para todas las PCs (una BD →
+  `abrirCajaDelDia` reutiliza la caja abierta por cualquier usuario).
 - **Tests**: `tests/api-server.test.mjs` (health, login HTTP, invoke con
-  token, guardas por rol vía HTTP, venta remota en la BD, auth:* no expuesto),
-  `tests/app-config.test.mjs` (config por equipo).
-- **Pendiente (fase siguiente)**: WebSocket para refresco en vivo
-  (`venta:creada`, cambios de stock/tasas entre PCs). Hoy las vistas se
-  actualizan al entrar/recargar.
+  token, guardas por rol vía HTTP, venta remota en la BD, auth:* no expuesto,
+  WS: rechazo sin token, eventos en escrituras remotas y locales, lecturas
+  y errores no emiten), `tests/app-config.test.mjs` (config por equipo).
 
 ### Despliegue en la oficina
 
@@ -292,6 +304,7 @@ npm run dev:demo # Desarrollo + seeders de simulación
 - `async/await` (no `.then()`)
 - Funciones arrow para callbacks
 - Commits en inglés con Conventional Commits
+- **Nunca ejecutar `git commit` salvo que el usuario lo pida explícitamente**
 - Errores de impresión: devolver `{ ok, error }`
 - Respuestas en español, conciso
 
