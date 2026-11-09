@@ -112,9 +112,6 @@
           <span>{{ modalVer.venta.tipo_documento === 'nota_entrega' ? 'Nota de entrega' : 'Factura' }}</span>
         </div>
         <div class="line"><span>Tasa usada</span><span>{{ tasaMostrada(modalVer.venta).toFixed(2) }} Bs</span></div>
-        <div v-if="modalVer.venta.metodo_pago" class="line">
-          <span>Método de pago</span><span>{{ modalVer.venta.metodo_pago === 'usdt' ? 'USDT · Divisas' : 'Bolívares (Bs)' }}</span>
-        </div>
         <div class="line"><span>Estado</span><span><StatusTag :estado="modalVer.venta.estado" /></span></div>
         <div v-if="modalVer.venta.estado === 'anulada'" class="line muted">
           <span>Anulada el</span><span>{{ formatFechaHoraUtc(modalVer.venta.anulado_en) }}</span>

@@ -19,7 +19,7 @@
           </div>
           <div class="login-field">
             <label class="field-label">Producto</label>
-            <ProductoCombobox ref="buscadorRef" :productos="productos" :iva-porcentaje="ivaPorcentaje" limpiar-al-seleccionar @seleccionar="agregarProducto" />
+            <ProductoCombobox ref="buscadorRef" :productos="productos" :iva-porcentaje="ivaConfigurado" limpiar-al-seleccionar @seleccionar="agregarProducto" />
           </div>
 
           <div class="cart-title">
@@ -46,7 +46,7 @@
               :item="item"
               :selected="productoActivoId === item.productoId"
               @select="productoActivoId = item.productoId"
-              @set-cantidad="(v) => setCantidadConTope(item.productoId, v)"
+              @set-cantidad="(v) => setCantidad(item.productoId, v)"
               @confirmar-cantidad="(v) => confirmarCantidadConTope(item.productoId, v)"
               @remove="quitarDelCarrito(item.productoId)"
             />
@@ -55,20 +55,18 @@
           <div class="cart-totals">
             <div class="row">
               <span>{{ ivaPorcentaje > 0 ? 'Subtotal sin IVA' : 'Subtotal' }}</span>
-              <span class="num">{{ metodoPago === 'bs' ? formatMontoBs(totales.subtotal.bs) : formatMontoUsdt(totales.subtotal.usdt) }}</span>
+              <span class="num">{{ formatMontoBs(totales.subtotal.bs) }}</span>
             </div>
             <div v-if="ivaPorcentaje > 0" class="row">
               <span>IVA {{ ivaPorcentaje }}%</span>
-              <span class="num">{{ metodoPago === 'bs' ? formatMontoBs(totales.iva.bs) : formatMontoUsdt(totales.iva.usdt) }}</span>
+              <span class="num">{{ formatMontoBs(totales.iva.bs) }}</span>
             </div>
             <div class="row total">
-              <span
-                >Total{{ ivaPorcentaje > 0 ? ' (IVA incluido)' : tipoDocumento === 'nota_entrega' ? ' (nota de entrega, sin IVA)' : '' }}
-                <span class="muted" style="display: block; font-size: 10.5px; font-weight: 400">
-                  ({{ metodoPago === 'bs' ? `≈ ${formatMontoUsdt(totales.total.usdt)}` : `≈ ${formatMontoBs(totales.total.bs)}` }})
-                </span></span
-              >
-              <span class="num">{{ metodoPago === 'bs' ? formatMontoBs(totales.total.bs) : formatMontoUsdt(totales.total.usdt) }}</span>
+              <span>Pago en bolívares{{ ivaPorcentaje > 0 ? ' (IVA incluido)' : '' }}</span>
+              <span class="num">
+                {{ formatMontoBs(totales.total.bs) }}
+                <small class="total-usd">{{ totales.total.usd == null ? '—' : formatUsd(totales.total.usd) }}</small>
+              </span>
             </div>
           </div>
 
@@ -77,17 +75,24 @@
               Factura{{ ivaConfigurado > 0 ? ` (IVA ${ivaConfigurado}%)` : '' }}
             </button>
             <button type="button" :class="{ active: tipoDocumento === 'nota_entrega' }" @click="setTipoDocumento('nota_entrega')">
-              Nota de entrega (sin IVA)
+              Nota de entrega
             </button>
           </div>
 
-          <div class="segmented" role="group" aria-label="Método de pago">
-            <button type="button" :class="{ active: metodoPago === 'bs' }" @click="setMetodoPago('bs')">
-              Bolívares (Bs)
-            </button>
-            <button type="button" :class="{ active: metodoPago === 'usdt' }" @click="setMetodoPago('usdt')">
-              USDT · Divisas
-            </button>
+          <div v-if="esNota" class="nota-opciones">
+            <fieldset class="nota-grupo">
+              <legend>Moneda del documento</legend>
+              <div class="nota-radios">
+                <label class="nota-radio" :class="{ activa: notaMoneda === 'usd' }">
+                  <input type="radio" name="nota-moneda" value="usd" :checked="notaMoneda === 'usd'" @change="setNotaMoneda('usd')" />
+                  <span>Dólares <small>($)</small></span>
+                </label>
+                <label class="nota-radio" :class="{ activa: notaMoneda === 'bs' }">
+                  <input type="radio" name="nota-moneda" value="bs" :checked="notaMoneda === 'bs'" @change="setNotaMoneda('bs')" />
+                  <span>Bolívares <small>(Bs)</small></span>
+                </label>
+              </div>
+            </fieldset>
           </div>
 
           <p v-if="hayExcesoStock" class="warning-box">
@@ -130,7 +135,8 @@
               v-for="precio in preciosDelProducto"
               :key="precio.tipoPrecioId"
               :precio="precio"
-              :iva-porcentaje="ivaPorcentaje"
+              :iva-porcentaje="ivaConfigurado"
+              :iva-incluido="Number(productoActivo.costo_con_iva) === 1"
               :selected="carrito.find((i) => i.productoId === productoActivoId)?.precioId === precio.id"
               @click="asignarPrecio(productoActivoId, precio.id)"
             />
@@ -186,26 +192,46 @@
         <hr />
         <div class="line"><span>Cliente</span><span>{{ modalTicket.clienteNombre }}</span></div>
         <hr />
-        <!-- Misma estructura que el ticket impreso: SOLO bolívares. Líneas
-             SIN IVA, luego Subtotal / IVA / TOTAL. -->
+        <!-- Misma estructura que el documento impreso: la factura va SOLO
+             en bolívares (líneas sin IVA + Subtotal/IVA/TOTAL); la nota de
+             entrega va en $ o en Bs (según se eligió), sin IVA ni método. -->
         <div v-for="item in modalTicket.items" :key="item.precioId" class="line">
           <span>
             {{ item.cantidad }} × {{ item.nombre }}
             <span class="muted" style="font-size: 10.5px; display: block">
-              {{ item.tipoPrecioNombre }} - {{ formatMontoBs(item.unitarioBs) }} c/u
+              {{ item.tipoPrecioNombre }} - {{ montoPreview(item.unitarioUsd, item.unitarioBs) }} c/u
             </span>
           </span>
-          <span>{{ formatMontoBs(item.subtotalBs) }}</span>
+          <span>{{ montoPreview(item.subtotalUsd, item.subtotalBs) }}</span>
         </div>
         <hr />
-        <template v-if="modalTicket.ivaPorcentaje > 0">
-          <div class="line"><span>Subtotal Bs</span><span>{{ formatMontoBs(modalTicket.subtotalBs) }}</span></div>
-          <div class="line"><span>IVA {{ modalTicket.ivaPorcentaje }}%</span><span>{{ formatMontoBs(modalTicket.ivaBs) }}</span></div>
+        <template v-if="modalTicket.tipoDocumento === 'nota_entrega'">
+          <div class="line" style="font-weight: 600"><span>TOTAL{{ modalTicket.notaMoneda === 'bs' ? ' Bs' : '' }}</span><span>{{ montoPreview(modalTicket.totalUsd, modalTicket.totalBs) }}</span></div>
+          <div class="recibo-preview">
+            <div>RECIBIDO: _________________________</div>
+            <div>FECHA: _________________________</div>
+            <div>FIRMA: _________________________</div>
+          </div>
         </template>
-        <div class="line" style="font-weight: 600"><span>TOTAL Bs</span><span>{{ formatMontoBs(modalTicket.totalBs) }}</span></div>
+        <template v-else>
+          <template v-if="modalTicket.ivaPorcentaje > 0">
+            <div class="line"><span>Subtotal Bs</span><span>{{ formatMontoBs(modalTicket.subtotalBs) }}</span></div>
+            <div class="line"><span>IVA {{ modalTicket.ivaPorcentaje }}%</span><span>{{ formatMontoBs(modalTicket.ivaBs) }}</span></div>
+          </template>
+          <div class="line" style="font-weight: 600"><span>TOTAL Bs</span><span>{{ formatMontoBs(modalTicket.totalBs) }}</span></div>
+        </template>
       </div>
-      <p class="muted" style="font-size: 11px; margin-top: 8px">
-        Se imprimirán 2 tickets: uno para el cliente y uno para la tienda.
+      <div class="copias-fila">
+        <span class="muted">Copias a imprimir:</span>
+        <label class="copia-opcion" :class="{ activa: modalTicket.copias === 1 }">
+          <input type="radio" :value="1" v-model.number="modalTicket.copias" /> 1
+        </label>
+        <label class="copia-opcion" :class="{ activa: modalTicket.copias === 2 }">
+          <input type="radio" :value="2" v-model.number="modalTicket.copias" /> 2
+        </label>
+      </div>
+      <p class="muted" style="font-size: 11px; margin-top: 6px">
+        Se imprimirá en hoja carta{{ modalTicket.copias === 2 ? ': ORIGINAL para el cliente y COPIA para la tienda' : ' una copia' }}.
       </p>
       <template #footer>
         <button class="btn btn-outline" type="button" :disabled="modalTicket.imprimiendo" @click="corregir">
@@ -217,7 +243,7 @@
       </template>
     </BaseModal>
 
-    <BaseModal v-if="modalStock.abierto" title="Stock insuficiente" @close="modalStock.abierto = false">
+    <BaseModal v-if="modalStock.abierto" title="Stock insuficiente" @close="aceptarStock">
       <template #icon>
         <span class="modal-icono">
           <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
@@ -231,17 +257,17 @@
       </p>
       <p class="warning-box">
         Solo tiene {{ modalStock.stock }} {{ modalStock.stock === 1 ? 'unidad disponible' : 'unidades disponibles' }}.
-        Se dejó la cantidad en el máximo disponible.
+        {{ modalStock.stock > 0 ? 'Al continuar, la cantidad se ajustará al máximo disponible.' : 'Al continuar, el producto se quitará del carrito.' }}
       </p>
       <template #footer>
-        <button class="btn btn-primary" type="button" @click="modalStock.abierto = false">Entendido</button>
+        <button class="btn btn-primary" type="button" @click="aceptarStock">Entendido</button>
       </template>
     </BaseModal>
 
     <BaseModal v-if="modalErrorImpresion.abierto" title="Error de impresión" @close="modalErrorImpresion.abierto = false">
-      <p class="muted" style="margin-bottom: 10px">
-        No se pudo imprimir el ticket. <strong>La venta se registró con éxito</strong>
-        y puedes reimprimirla desde Ventas del día cuando la impresora responda.
+      <p class="venta-registrada">La venta se registró con éxito</p>
+      <p class="muted" style="margin-bottom: 10px; text-align: center">
+        No se pudo imprimir la factura. Puedes reimprimirla desde Ventas del día cuando la impresora responda.
       </p>
       <p class="warning-box">{{ modalErrorImpresion.mensaje }}</p>
       <template #footer>
@@ -259,10 +285,10 @@ import CartItem from '../components/CartItem.vue'
 import ClienteCombobox from '../components/ClienteCombobox.vue'
 import ProductoCombobox from '../components/ProductoCombobox.vue'
 import SearchSelect from '../components/SearchSelect.vue'
-import { formatMontoBs, formatMontoUsdt } from '../composables/useFormato'
+import { formatUsd, formatMontoBs } from '../composables/useFormato'
 import { mensajeError } from '../composables/useErrores'
 import { alCambiar } from '../composables/useEventos'
-import { calcularLinea, calcularTotales } from '../../../shared/venta.calculo.js'
+import { calcularLinea, calcularLineaNota, calcularTotales } from '../../../shared/venta.calculo.js'
 import { session } from '../store/session'
 import logoUrl from '../assets/logo.png'
 import {
@@ -272,9 +298,10 @@ import {
   setCantidad,
   confirmarCantidad,
   quitarDelCarrito,
+  ajustarCantidadAlStock,
   limpiarTicket,
-  setMetodoPago,
-  setTipoDocumento
+  setTipoDocumento,
+  setNotaMoneda
 } from '../store/venta'
 
 const productos = ref([])
@@ -288,10 +315,11 @@ const cargando = ref(true)
 const error = ref('')
 const buscadorRef = ref(null)
 
-// El ticket en curso (carrito, cliente, método de pago y producto
+// El ticket en curso (carrito, cliente, tipo de documento y producto
 // seleccionado) vive en un store de módulo (ventaState) para que no se
 // pierda al navegar a otra pantalla y volver a "Nueva venta".
-const { clienteSeleccionadoId, productoActivoId, metodoPago, tipoDocumento } = toRefs(ventaState)
+const { clienteSeleccionadoId, productoActivoId, tipoDocumento, notaMoneda } = toRefs(ventaState)
+const esNota = computed(() => tipoDocumento.value === 'nota_entrega')
 const carrito = ventaState.carrito
 
 async function asegurarPrecios(productoId, forzar = false) {
@@ -353,22 +381,31 @@ const productoActivo = computed(() => productos.value.find((p) => p.id === produ
 const preciosDelProducto = computed(() => preciosPorProducto.value.get(productoActivoId.value) ?? [])
 
 // IVA general configurable. El % se lee de la configuración al cargar la
-// pantalla; el backend usa el mismo valor al registrar la venta. La nota de
-// entrega no lleva IVA: ivaPorcentaje (el que usan cards, carrito, buscador
-// y vista previa) es 0 — mismo criterio que crearVenta.
+// pantalla; el backend usa el mismo valor al registrar la venta. En la
+// pantalla TODO se muestra con IVA incluido, en ambos documentos: la
+// factura cobra base + IVA (o desglosa el IVA que ya traía el costo) y la
+// nota de entrega cobra el precio con IVA embebido sin desglosarlo.
+// `ivaPorcentaje` (0 en nota) solo controla los rótulos del carrito.
 const ivaConfigurado = ref(16)
 const ivaPorcentaje = computed(() => (tipoDocumento.value === 'nota_entrega' ? 0 : ivaConfigurado.value))
 
 // Cada línea lleva sus montos calculados con shared/venta.calculo.js — la
 // misma función que usa el backend al guardar la venta (y que imprime la
-// factura) —: unitario/subtotal sin IVA, IVA y total con IVA.
+// factura) —: unitario/subtotal sin IVA, IVA y total con IVA. Si el costo
+// del producto traía IVA (costo_con_iva), el precio materializado ya es el
+// precio con IVA: la factura lo desglosa y la nota lo embebe.
 const carritoDetallado = computed(() =>
   carrito
     .map((item) => {
       const producto = productos.value.find((p) => p.id === item.productoId)
       if (!producto) return null
       const precio = (preciosPorProducto.value.get(item.productoId) ?? []).find((p) => p.id === item.precioId) ?? null
-      const linea = precio ? calcularLinea(precio, item.cantidad, ivaPorcentaje.value) : null
+      const conIva = Number(producto.costo_con_iva) === 1
+      const linea = precio
+        ? esNota.value
+          ? calcularLineaNota(precio, item.cantidad, ivaConfigurado.value, conIva)
+          : calcularLinea(precio, item.cantidad, ivaConfigurado.value, conIva)
+        : null
       return { ...item, producto, precio, linea, stock: producto.stock, excedeStock: item.cantidad > producto.stock }
     })
     .filter(Boolean)
@@ -382,36 +419,33 @@ const totales = computed(() => calcularTotales(carritoDetallado.value.filter((i)
 
 const clienteActual = computed(() => clientes.value.find((c) => c.id === clienteSeleccionadoId.value) ?? null)
 
-// La cantidad nunca puede superar el stock: el + del control ya se topa en
-// CartItem y aquí se limita la entrada manual. Si el usuario escribió de más,
-// se toma el disponible y al confirmar (Enter/blur) se avisa con un modal.
-const excesoPorProducto = new Map()
-const modalStock = reactive({ abierto: false, nombre: '', detalle: '', stock: 0 })
-
-function setCantidadConTope(productoId, valor) {
-  const item = carritoDetallado.value.find((i) => i.productoId === productoId)
-  const stock = item?.stock
-  const v = parseInt(valor, 10)
-  if (Number.isInteger(v) && Number.isFinite(stock) && v > stock) {
-    excesoPorProducto.set(productoId, v)
-    setCantidad(productoId, String(Math.max(0, stock)))
-    return
-  }
-  excesoPorProducto.delete(productoId)
-  setCantidad(productoId, valor)
-}
+// El campo acepta la escritura transitoria; al confirmar se compara con el
+// stock. Aplicar el límite al aceptar el modal garantiza que tanto el estado
+// como el valor visible del input cambien juntos.
+const modalStock = reactive({ abierto: false, productoId: null, nombre: '', detalle: '', stock: 0 })
 
 function confirmarCantidadConTope(productoId, valor) {
-  const excedente = excesoPorProducto.get(productoId)
-  excesoPorProducto.delete(productoId)
-  confirmarCantidad(productoId, valor)
-  if (excedente != null) {
-    const producto = productos.value.find((p) => p.id === productoId)
-    modalStock.nombre = producto?.nombre || 'El producto'
-    modalStock.detalle = [producto?.codigo, producto?.marca].filter(Boolean).join(' · ')
-    modalStock.stock = Math.max(0, producto?.stock ?? 0)
-    modalStock.abierto = true
+  const producto = productos.value.find((p) => p.id === productoId)
+  const stock = Number(producto?.stock)
+  const cantidad = Number(valor)
+  if (!Number.isInteger(cantidad) || cantidad < 1 || !Number.isFinite(stock) || cantidad <= stock) {
+    confirmarCantidad(productoId, valor)
+    return
   }
+  modalStock.productoId = productoId
+  modalStock.nombre = producto.nombre
+  modalStock.detalle = [producto.codigo, producto.marca].filter(Boolean).join(' · ')
+  modalStock.stock = Math.max(0, stock)
+  modalStock.abierto = true
+}
+
+function aceptarStock() {
+  if (modalStock.productoId != null) {
+    const stockActual = productos.value.find((p) => p.id === modalStock.productoId)?.stock ?? 0
+    ajustarCantidadAlStock(modalStock.productoId, Math.min(modalStock.stock, stockActual))
+  }
+  modalStock.abierto = false
+  modalStock.productoId = null
 }
 
 const modalCliente = reactive({
@@ -478,12 +512,19 @@ const modalTicket = reactive({
   ivaBs: 0,
   ivaUsdt: 0,
   totalBs: 0,
+  totalUsd: 0,
   totalUsdt: 0,
-  metodoPago: 'bs',
   tipoDocumento: 'factura',
-  clienteNombre: ''
+  notaMoneda: 'usd',
+  clienteNombre: '',
+  copias: 2
 })
 const errorVenta = ref('')
+
+// Monto de la vista previa: la factura siempre en Bs; la nota en la moneda
+// elegida ($ o Bs).
+const montoPreview = (usd, bs) =>
+  modalTicket.tipoDocumento === 'nota_entrega' && modalTicket.notaMoneda === 'usd' ? formatUsd(usd) : formatMontoBs(bs)
 
 // Modal de error de impresión: se abre encima de la vista previa con el
 // motivo del fallo, para que al cerrarlo se pueda reintentar o corregir.
@@ -524,16 +565,18 @@ async function finalizarVenta() {
   modalTicket.numeroTicket = ''
   modalTicket.ventaId = null
   modalTicket.imprimiendo = false
-  modalTicket.metodoPago = metodoPago.value
   modalTicket.tipoDocumento = tipoDocumento.value
+  modalTicket.notaMoneda = notaMoneda.value
   modalTicket.items = carritoDetallado.value.map((item) => ({
     precioId: item.precioId,
     cantidad: item.cantidad,
     nombre: item.producto.nombre,
     tipoPrecioNombre: item.precio.tipoPrecioNombre,
     unitarioBs: item.linea.unitario.bs,
+    unitarioUsd: item.linea.unitario.usd,
     unitarioUsdt: item.linea.unitario.usdt,
     subtotalBs: item.linea.subtotal.bs,
+    subtotalUsd: item.linea.subtotal.usd,
     subtotalUsdt: item.linea.subtotal.usdt
   }))
   const t = totales.value
@@ -543,6 +586,7 @@ async function finalizarVenta() {
   modalTicket.ivaBs = t.iva.bs
   modalTicket.ivaUsdt = t.iva.usdt
   modalTicket.totalBs = t.total.bs
+  modalTicket.totalUsd = t.total.usd
   modalTicket.totalUsdt = t.total.usdt
   modalTicket.clienteNombre = clienteActual.value?.nombre || ''
   modalTicket.abierto = true
@@ -568,8 +612,10 @@ async function imprimirYCerrar() {
         venta = await window.api.ventas.crear({
           clienteId: clienteSeleccionadoId.value,
           usuarioId: session.usuario?.id,
-          metodoPago: metodoPago.value,
+          metodoPago: 'bs',
           tipoDocumento: modalTicket.tipoDocumento,
+          notaMoneda: modalTicket.notaMoneda,
+          notaConIva: true,
           items: carritoDetallado.value.map((item) => ({
             precioId: item.precioId,
             cantidad: item.cantidad
@@ -604,13 +650,13 @@ async function imprimirYCerrar() {
     // muestra el modal de error con el motivo.
     modalTicket.abierto = false
 
-    const resultado = await window.api.impresora.imprimirVenta(modalTicket.ventaId)
+    const resultado = await window.api.impresora.imprimirVenta(modalTicket.ventaId, modalTicket.copias)
     if (!resultado.ok) {
-      mostrarErrorImpresion(resultado.error || 'No se pudo imprimir el ticket')
+      mostrarErrorImpresion(resultado.error || 'No se pudo imprimir el documento')
     }
   } catch (e) {
     modalTicket.abierto = false
-    mostrarErrorImpresion(mensajeError(e) || 'No se pudo imprimir el ticket')
+    mostrarErrorImpresion(mensajeError(e) || 'No se pudo imprimir el documento')
   } finally {
     modalTicket.imprimiendo = false
   }
@@ -634,11 +680,140 @@ alCambiar('config', async () => {
 </script>
 
 <style scoped>
+.total-usd {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+  text-align: right;
+}
+
 .ticket-logo {
   display: block;
   width: 55%;
   height: auto;
   margin: 0 auto 8px;
   filter: grayscale(1);
+}
+
+.venta-registrada {
+  font-size: 22px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--success);
+  margin-bottom: 8px;
+}
+
+.copias-fila {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.copia-opcion {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.copia-opcion.activa {
+  border-color: var(--primary);
+  background: var(--primary-soft, #eef4ff);
+  font-weight: 600;
+}
+
+.copia-opcion input {
+  accent-color: var(--primary);
+  margin: 0;
+}
+
+/* Opciones de la nota de entrega: panel anidado bajo el selector de
+   documento, con radios (moneda) y checkbox (IVA). */
+.nota-opciones {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--radius);
+  background: var(--surface-alt);
+  display: grid;
+  gap: 10px;
+}
+
+.nota-grupo {
+  border: none;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.nota-grupo legend {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0;
+  margin-bottom: 6px;
+}
+
+.nota-radios {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.nota-radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.nota-radio:hover {
+  border-color: var(--primary);
+}
+
+.nota-radio.activa {
+  border-color: var(--primary);
+  background: var(--primary-soft, #eef4ff);
+  font-weight: 600;
+}
+
+.nota-radio small {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.nota-radio input {
+  accent-color: var(--primary);
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+
+/* Vista previa de la nota de entrega: bloque de recepción como en la hoja. */
+.recibo-preview {
+  margin-top: 16px;
+  font-size: 11px;
+  line-height: 2.4;
+  color: var(--text-secondary);
+  letter-spacing: .5px;
 }
 </style>

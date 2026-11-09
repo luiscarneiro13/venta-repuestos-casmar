@@ -59,10 +59,12 @@ const props = defineProps({
   modelValue: { type: Number, default: null },
   limpiarAlSeleccionar: { type: Boolean, default: false },
   inputId: { type: String, default: undefined },
-  placeholder: { type: String, default: 'Buscar por nombre, código, código de barra o marca…' },
+  placeholder: { type: String, default: 'Buscar por nombre, código, código de barra, marca o descripción…' },
   // En la venta se pasa el IVA para que el rango coincida con las cards
   // (precio con IVA incluido). Con 0 se muestra el precio base.
-  ivaPorcentaje: { type: Number, default: 0 }
+  ivaPorcentaje: { type: Number, default: 0 },
+  // Nota de entrega "sin IVA": el rango se muestra con la base sin impuesto.
+  sinIva: { type: Boolean, default: false }
 })
 const emit = defineEmits(['seleccionar', 'update:modelValue'])
 
@@ -97,7 +99,7 @@ const resultados = computed(() => {
   if (palabras.length === 0) return props.productos
   return props.productos
     .filter((p) => {
-      const texto = normalizar(`${p.nombre} ${p.codigo || ''} ${p.codigo_barras || ''} ${p.marca || ''} ${p.categoria_nombre || ''}`)
+      const texto = normalizar(`${p.nombre} ${p.codigo || ''} ${p.codigo_barras || ''} ${p.marca || ''} ${p.categoria_nombre || ''} ${p.descripcion || ''}`)
       return palabras.every((palabra) => texto.includes(palabra))
     })
     .slice(0, MAX_RESULTADOS)
@@ -111,12 +113,17 @@ function abrirLista() {
   indiceActivo.value = -1
 }
 
-const conIva = (usd) => calcularLinea({ precioUsd: usd }, 1, props.ivaPorcentaje).unitarioConIva.usd
+// El rango se muestra con IVA: si el costo del producto ya lo traía
+// (costo_con_iva), el precio materializado es el precio con IVA.
+const conIva = (producto, usd) => {
+  const l = calcularLinea({ precioUsd: usd }, 1, props.ivaPorcentaje, Number(producto.costo_con_iva) === 1)
+  return props.sinIva ? l.unitario.usd : l.unitarioConIva.usd
+}
 
 function rangoPrecios(producto) {
-  const sufijo = props.ivaPorcentaje > 0 ? ' c/IVA' : ''
-  if (producto.precio_min_usd === producto.precio_max_usd) return formatUsd(conIva(producto.precio_min_usd)) + sufijo
-  return `${formatUsd(conIva(producto.precio_min_usd))} – ${formatUsd(conIva(producto.precio_max_usd))}${sufijo}`
+  const sufijo = props.sinIva ? ' s/IVA' : props.ivaPorcentaje > 0 ? ' c/IVA' : ''
+  if (producto.precio_min_usd === producto.precio_max_usd) return formatUsd(conIva(producto, producto.precio_min_usd)) + sufijo
+  return `${formatUsd(conIva(producto, producto.precio_min_usd))} – ${formatUsd(conIva(producto, producto.precio_max_usd))}${sufijo}`
 }
 
 function onInput() {

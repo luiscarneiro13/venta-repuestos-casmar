@@ -152,6 +152,20 @@ test('logout remoto cierra solo ese token, no la sesión local', async () => {
   logout()
 })
 
+test('un argumento undefined viaja como centinela y llega undefined (defaults de los handlers)', async () => {
+  await levantar()
+  const { token } = await loginHttp('admin', 'admin123')
+  // JSON convierte undefined en null; el proxy lo manda como centinela y el
+  // servidor lo restaura: productos:listar sin argumentos debe responder,
+  // no romper el default `= {}` del repo (bug del esclavo en red).
+  const resp = await post('/api/invoke', {
+    canal: 'productos:listar',
+    args: [{ __undefined_arg__: true }]
+  }, token)
+  assert.equal(resp.status, 200)
+  assert.ok(Array.isArray(resp.datos.data))
+})
+
 test('auth:* no se expone por invoke (no debe tocar la sesión local del servidor)', async () => {
   await levantar()
   const { token } = await loginHttp('admin', 'admin123')

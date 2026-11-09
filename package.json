@@ -1,6 +1,6 @@
 {
   "name": "venta-repuestos",
-  "version": "1.0.2",
+  "version": "1.0.6",
   "description": "POS de escritorio para Venta de Repuestos (Electron + Vue 3 + SQLite)",
   "main": "./out/main/index.js",
   "author": "Luis Carneiro",

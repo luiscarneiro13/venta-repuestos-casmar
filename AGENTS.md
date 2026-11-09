@@ -4,16 +4,18 @@
 > catálogo abierto de productos, cada uno con N precios con nombre (ver
 > `Docs/analisis-venta-repuestos.md`).
 
-> **Plan vigente (pendiente de implementar)**: precios por márgenes con doble
-> tasa BCV + USDT Binance — ver `Docs/plan-precios-margenes-tasas.md`. Reemplaza
-> el modelo actual de precios fijos por producto. Fase 2 agregará IVA general.
+> **Modelo vigente**: un margen y un precio materializado por producto y tipo;
+> importes Bs con tasa BCV e IVA configurable. La tasa USDT se registra
+> independientemente para uso futuro; las columnas legadas de precio USDT
+> se conservan por compatibilidad con bases de datos anteriores.
 
 ## Stack
 
 - **Electron** + **Vue 3** (`<script setup>`) + **Vue Router**
 - **Vite / Electron Vite** como bundler
 - **SQLite** con `better-sqlite3`
-- Impresión térmica ESC/POS con `@maxxuxx/node-printer` (solo Windows, `winspool`)
+- Impresión de documentos en hoja carta con `webContents.print()` (`printer/documento.printer.js`);
+  el módulo térmico ESC/POS (`ticket.printer.js`, `@maxxuxx/node-printer`) queda como legado sin uso
 
 ## Arquitectura
 
@@ -35,7 +37,8 @@ src/
 │   ├── repositories/         # Acceso a SQLite (queries)
 │   ├── ipc/                  # Handlers ipcMain.handle(...)
 │   └── printer/
-│       └── ticket.printer.js # Construcción de tickets ESC/POS
+│       ├── documento.printer.js # Documentos HTML en hoja carta + print vía ventana oculta
+│       └── ticket.printer.js   # Tickets ESC/POS (legado, sin uso en la app)
 ├── preload/
 │   └── index.js             # Expone window.api.* (ipcRenderer.invoke)
 └── renderer/
@@ -88,16 +91,27 @@ Cada nueva consulta del backend requiere tocar las 4 capas:
     su texto `descripcion` (exacto → prefijo → contiene)
   - Los productos con ventas/movimientos no se borran: se desactivan (`activo = 0`)
   - Al crear solo se guardan los datos del catálogo; costo y márgenes se cargan en la primera entrada
+  - El `precio_compra_usd` también se corrige a mano al editar el producto (campo "Precio de
+    compra (USD)"): mayor que cero o vacío (null = sin costo). Al guardarlo se rematerializan
+    `valor_usd`/`valor_usdt` con los márgenes vigentes, en la misma transacción; sin costo los
+    precios conservan su último valor
   - `codigo_barras` es opcional y único cuando existe; los buscadores (catálogo,
     combobox de venta/operaciones y `productos.listar({texto})`) lo incluyen:
     escanear un código encuentra el producto directo
+  - `descripcion` guarda los nombres coloquiales del repuesto ("goma" para
+    "buje") y **todos los buscadores la incluyen**: el LIKE de
+    `productos.repo.listar({texto})`, el filtro del `ProductoCombobox` y los
+    `productosFiltrados` de `/inventario` y `/productos`
 - **tasas_cambio**: id, valor (BCV legacy), valor_bcv, valor_usdt, usuario_id, fecha_hora — histórico auditable, la vigente es la última
 - **tipos_precio**: id, nombre (UNIQUE), orden, margen_default (DEFAULT 100), activo
   - Nombres semilla: Precio Full, Precio Especial, Precio Interno
   - Solo se desactivan si tienen uso; nunca se borran con ventas asociadas
-- **precios**: id, producto_id, tipo_precio_id, valor_usd, descripcion, margen, activo
-  - UNIQUE(producto_id, tipo_precio_id). `margen` = % propio del producto (NULL → usa `margen_default` del tipo)
-  - `valor_usd` está materializado: `round2(costo × (1+margen/100))`, recalculado al guardar entrada o cambiar márgenes/costo
+- **precios**: id, producto_id, tipo_precio_id, valor_usd, valor_usdt, descripcion, margen, margen_usdt, activo
+  - UNIQUE(producto_id, tipo_precio_id). `margen` es el único margen activo
+    (propio o `margen_default`). `valor_usd` materializa
+    `round2(costo × (1+margen/100))`; Bs se obtiene con la tasa BCV.
+    `margen_usdt`/`valor_usdt` son columnas legadas: no se borran ni se
+    usan para determinar el precio vigente.
 - **ventas**: id, numero_ticket, cliente_id, usuario_id, tasa_valor (BCV), tasa_bcv, tasa_usdt, metodo_pago ('bs'|'usdt'), tipo_documento ('factura'|'nota_entrega'), iva_porcentaje, iva_usd, iva_bs, iva_usdt, total_usd, total_bs, total_usdt, estado, creado_en
   - `total_*` es el monto **final cobrado** (`base + IVA`); `iva_*` es el impuesto desglosado. Base = total − iva. Ventas anteriores a la migración 019 tienen `iva_*` en NULL
 - **venta_detalle**: id, venta_id, precio_id, cantidad, precio_unitario_usd/bs/usdt, subtotal_usd/bs/usdt,
@@ -105,29 +119,66 @@ Cada nueva consulta del backend requiere tocar las 4 capas:
 - **inventario_movimientos**: producto_id, tipo, cantidad, saldo, motivo, costo_usd, proveedor_id, venta_id, usuario_id, creado_en
   - Stock de un producto = `saldo` del último movimiento; `costo_usd` = costo de esa compra (auditoría)
   - Entrada transaccional: movimiento + costo del producto + márgenes (`precios.margen`/`valor_usd`)
+  - **Edición de entradas** (`inventario:editarMovimiento`): una entrada se corrige completa —
+    cantidad, nota, proveedor, costo y % de utilidad, en una sola transacción. El saldo de ella y
+    de todos los movimientos posteriores se desplaza con la diferencia; se rechaza si quedaría
+    algún saldo en negativo (unidades ya despachadas). El costo del producto y los precios solo
+    se recalculan si la entrada editada es la **última con costo** (`ultimaEntradaConCosto`):
+    corregir una entrada vieja queda en el historial sin pisar el costo vigente. Las entradas de
+    devolución por anulación (`venta_id` o motivo "Anulación …") solo corrigen cantidad/nota.
+    **Anulación de entradas** (`inventario:anularMovimiento`, columnas `anulada`/`anulada_en`/
+    `anulada_por_id`, migración 026): la fila NO se borra — queda marcada para auditoría y su
+    cantidad se descuenta del saldo propio y de los posteriores (rechazo si queda saldo negativo).
+    El costo del producto vuelve a la última entrada con costo vigente (`ultimaEntradaConCosto`
+    excluye anuladas; `rematerializarPrecios` recalcula con los márgenes guardados — sin costo,
+    los precios conservan su último valor). No se anulan salidas ni devoluciones por venta; una
+    anulada no se edita ni se re-anula. Tests: `tests/entrada-edicion.test.mjs`
 - **cajas**: tasa_apertura (BCV), tasa_apertura_usdt, tasa_cierre, tasa_cierre_usdt, ...
 
 ### Reglas de negocio de ventas
 
 - Una línea del ticket = un producto. Primero se agrega sin precio, luego se
   selecciona la línea y se le asigna uno de sus precios de venta.
-- **Precios por margen** (modelo aprobado, ver `Docs/plan-precios-margenes-tasas.md`):
-  `precioUsd = round2(costo × (1+margen/100))` (markup sobre costo, 100% = doble);
-  `precioBs = round2(precioUsd × tasa_bcv)` (canónico); `precioUsdt = round2(precioBs ÷ tasa_usdt)`.
-  Única fuente: `services/precios.calculo.js` (backend) y `composables/usePrecios.js` (preview).
+- **Precio vigente único por producto y tipo**: `precios.valor_usd` y `precios.margen`
+  (markup sobre el costo, 100% = doble) son la referencia; `precioBs =
+  round2(valor_usd × BCV)`. La misma línea se muestra en Bs con su importe
+  en $ debajo. Al registrar entradas o corregir costo/margen se actualiza
+  el precio materializado usando solo ese margen. Las columnas históricas
+  `margen_usdt` y `valor_usdt` se conservan para no alterar datos de inventario,
+  pero no definen un segundo precio operativo. Las tasas BCV y USDT siguen
+  registrándose y mostrándose por separado (inicio de sesión, TopBar, Ventas
+  del día y cierre de caja); solo BCV determina el precio vigente. La tasa
+  USDT se conserva para un uso futuro, no se reemplaza por BCV.
+  El carrito mantiene la asignación MANUAL de tipo de precio; factura e IVA
+  incluido siguen siendo el estado inicial. `venta_detalle.margen_utilidad`
+  guarda el margen del precio seleccionado.
 - `ventas.service.crearVenta` lee las tasas vigentes de la BD (no del renderer),
   toma el precio unitario materializado, **bloquea la venta si la suma de unidades
   de un producto supera su stock**, guarda snapshot completo (márgenes, tasas,
   método de pago) y registra venta + salidas en una transacción. Anular devuelve stock.
-- **Tipo de documento** (`ventas.tipo_documento`, migración 023): `factura` (default, con IVA)
-  o `nota_entrega` (todo igual — precios, tasas, stock, ticket — pero **IVA 0**: `crearVenta`
-  usa 0% y total = subtotal). Correlativos independientes: facturas `T-0001…`, notas `NE-0001…`.
-  En la pantalla de venta un selector Factura / Nota de entrega (store `tipoDocumento`, se
-  reinicia con el ticket); `ivaPorcentaje` es 0 en nota, así cards, carrito, buscador y vista
-  previa salen sin IVA. El ticket de la nota dice `NOTA DE ENTREGA` / `Nro. NE-…` y solo TOTAL
-  Bs. El reporte Z cuenta facturas y notas. Tests: `tests/nota-entrega.test.mjs`.
-- La venta cobra **un solo método de pago**: `bs` (BCV) o `usdt` (Binance).
-  `total_bs` siempre se guarda (canónico); el ticket imprime **solo bolívares**.
+- **Tipo de documento** (`ventas.tipo_documento`, migración 023): `factura` (default)
+  o `nota_entrega`. La factura imprime líneas sin IVA + `Subtotal / IVA / TOTAL` en Bs;
+  la nota **nunca desglosa IVA** (`iva_porcentaje` 0, `iva_*` 0). La única opción
+  propia de la nota en pantalla es la **moneda** del documento ($ o Bs,
+  `ventas.nota_moneda` 'usd'|'bs', migración 028); las notas nuevas siempre cobran
+  el precio con IVA embebido (`calcularLineaNota` con `conIva=true`, que equivale a
+  `precioUnitarioConIva` + IVA 0%) y se guardan con `nota_con_iva = 1`. La columna
+  `ventas.nota_con_iva` y el modo "sin IVA" (`precioUnitarioSinIva`) quedan solo
+  para reimprimir notas históricas creadas con esa opción.
+  Correlativos independientes: facturas `T-0001…`, notas `NE-0001…`. Store:
+  `tipoDocumento`, `notaMoneda` (se reinician con el ticket). El documento
+  dice `NOTA DE ENTREGA` / `Nro. NE-…`, sin IVA, sin método de pago ni tasas, con el
+  bloque de recepción fijo abajo a la izquierda: RECIBIDO / FECHA / FIRMA (`.recibo` +
+  `pagina-nota`). Las facturas nuevas no imprimen tasas; la reimpresión lee
+  tipo/moneda/IVA de la BD. El reporte Z
+  cuenta facturas y notas. Tests: `tests/nota-entrega.test.mjs`, `tests/documento-venta.test.mjs`.
+- Las ventas nuevas se registran siempre con `metodo_pago = 'bs'` (BCV): no hay
+  selector de método de pago en `/venta`. Cada línea y el total del carrito
+  muestran Bs como importe principal y $ del MISMO precio debajo (no hay una
+  cotización separada para divisas). El reporte Z y las pantallas activas
+  ya no muestran precios USDT ni un segundo margen; sí muestran las tasas
+  BCV y USDT del día. Los campos legados de la BD siguen disponibles; no se
+  borran productos, costos ni movimientos.
 - **IVA general** (configuración `iva_porcentaje`, default 16, editable en
   `/configuracion` → Impuestos). **Única fuente: `src/shared/venta.calculo.js`**
   (`calcularLinea`, `calcularTotales`), importada por la pantalla de venta
@@ -136,6 +187,19 @@ Cada nueva consulta del backend requiere tocar las 4 capas:
   - IVA **por unidad** y por moneda: `ivaUnit = r2(base×iva%)`,
     `conIva = r2(base+ivaUnit)`; línea: `subtotal = r2(base×q)`,
     `iva = r2(ivaUnit×q)`, `total = subtotal+iva` (= `conIva×q`). Totales = suma de líneas.
+  - **Costo con IVA incluido** (`productos.costo_con_iva` + snapshot
+    `inventario_movimientos.costo_con_iva`, migración 027): declara si el costo de
+    compra ya trae IVA. **Ya no se edita desde la UI**: todos los campos de costo
+    (entrada, edición de entrada y producto) piden el costo sin IVA y envían
+    `costoConIva: false`; el flag queda solo para respetar filas históricas.
+    Si es 1, el precio materializado `costo×(1+margen)` **es** el precio con IVA:
+    `calcularLinea(precio, q, iva, ivaIncluido)` lo desglosa hacia atrás
+    (`unitario = r2(precio/(1+iva%))`, `ivaUnit = r2(precio − unitario)`); la factura
+    muestra ese desglose y el total coincide al céntimo con lo cobrado. Si es 0, el
+    materializado es la base y se le suma el IVA encima (comportamiento clásico).
+    `precioUnitarioConIva` da el precio final al cliente en ambos casos; la nota de
+    entrega lo usa con IVA 0% para cobrarlo sin desglosar. El flag viaja en
+    `precios.buscarPorId` (`producto_costo_con_iva`) y en `totalesEsperados`.
   - **Pantalla de venta**: precios CON IVA (cards, c/u y subtotal de línea, rango del buscador).
   - **Factura** (vista previa = ticket impreso): líneas SIN IVA, luego
     `Subtotal / IVA X% / TOTAL`, todo en Bs (nada de dólares en la factura).
@@ -143,7 +207,7 @@ Cada nueva consulta del backend requiere tocar las 4 capas:
   - `finalizarVenta` refresca precios e IVA antes de la vista previa y envía
     `totalesEsperados`; `crearVenta` rechaza si difieren al céntimo (cambió tasa/IVA).
   - Reportes (consumo por cliente, gráfica de ventas totales) suman `ventas.total_*` (con IVA).
-  - Formato: Bs y USDT con `es-VE`, `$` con `en-US`, igual en pantalla e impresora.
+  - Formato: Bs con `es-VE`, `$` con `en-US`, igual en pantalla e impresora.
   - Regresión: `tests/venta-calculo.test.mjs`, `tests/qa-conciliacion.test.mjs`
     (320 escenarios pantalla = BD) y `tests/qa-ticket.test.mjs` (160 ventas, ticket = vista previa).
 - Los reportes trabajan con **unidades** y montos, no con productos fijos.
@@ -179,7 +243,7 @@ Archivos de simulación en `seeds/dev/`:
 |------------------------|--------------------------|
 | `/`                    | Login                    |
 | `/menu`                | Menú principal           |
-| `/venta`               | Punto de venta (buscador de producto + cards de precio + método de pago) |
+| `/venta`               | Punto de venta (buscador de producto + cards de precio; cobro en Bs) |
 | `/inventario`          | Catálogo de productos (tabla, búsqueda, export XLSX, ficha modal ancha) |
 | `/operaciones-inventario` | Operaciones de entrada y salida (existencias y ajustes) |
 | `/indicadores`         | Indicadores (cards)      |
@@ -231,8 +295,9 @@ HTTP dentro de la LAN. La BD nunca se comparte como archivo (nada de SMB).
   (`prepararModoCliente`) todos los canales se sustituyen por un proxy HTTP
   (`client/proxy.js`, `fetch` con `Authorization: Bearer <token>`), salvo los
   **locales**: `auth:*`, `appConfig:*`, `impresora:*` y `sistema:version` —
-  la impresión siempre sale por `winspool` de la PC donde está la impresora
-  (pide los datos al servidor con `impresora:datos*` y arma el ticket local).
+  la impresión siempre sale por la impresora de la PC donde está configurada
+  (pide los datos al servidor con `impresora:datos*` —incluido el bloque
+  `negocio`— y arma el documento localmente).
 - **Registro único de canales** (`ipc/registro.js`): todos los handlers se
   registran con `registrar()` en un mapa; `instalarIpc()` los expone por
   `ipcMain.handle` y el servidor los ejecuta por `invoke`. Un solo handler
@@ -272,20 +337,32 @@ HTTP dentro de la LAN. La BD nunca se comparte como archivo (nada de SMB).
    firewall de entrada al puerto 8530, app en el arranque de Windows.
 3. En cada esclava: `/sistema` → modo Esclavo + IP del servidor + "Probar
    conexión" → reiniciar la app.
-4. La impresora se configura en cada PC (`/impresora`): nombre `winspool`
-   local y ancho 58/80mm.
+4. La impresora se configura en cada PC (`/impresora`): el nombre de la
+   impresora de oficina tal como aparece instalada en el sistema.
 
 ## Impresión
 
-- Por cada venta se imprimen **2 tickets**: copia cliente y copia tienda
-- La factura (ticket de venta y su vista previa) va **SOLO en bolívares**, pague
-  en Bs o en USDT: sin montos en $/USDT ni tasas. `tests/qa-ticket.test.mjs` lo exige.
-  La pantalla de venta (cards, carrito, totales) sí muestra Bs, $ y USDT.
-- Ítems: `cantidad x producto` + `tipo - precio c/u` + subtotal. Usar `wrap()` para textos
-  largos: `leftRight()`/`keyValue()` superponen texto si no cabe (en 58mm generaba montos falsos)
-- Al cerrar caja se imprime automáticamente un **reporte Z** (ventas del día)
-- Anchos soportados: 58mm y 80mm
-- La impresión real solo funciona en Windows (`winspool`)
+- Todo se imprime en **hoja carta** (Letter 216×279mm) en la impresora de
+  oficina configurada en `/impresora`, vía `webContents.print()` en una
+  ventana oculta (`documento.printer.js`): funciona con cualquier driver y
+  en cualquier SO (no solo Windows). El módulo térmico `ticket.printer.js`
+  queda como legado (su QA numérico sigue en `tests/qa-ticket.test.mjs`).
+- Al finalizar la venta el usuario elige **1 o 2 copias**. Con 2 salen dos
+  trabajos rotulados: **ORIGINAL** (cliente, "Gracias por su compra") y
+  **COPIA** (tienda, líneas de firma). La misma elección está en Reimprimir
+  de Ventas del día (`impresora:imprimirVenta(ventaId, copias)`).
+- Encabezado: logo + datos del negocio configurables en `/configuracion` →
+  "Datos del negocio" (claves `negocio_nombre/rif/direccion/telefono`,
+  canales `configuracion:obtenerNegocio`/`guardarNegocio`). El bloque viaja
+  dentro de `impresora:datos*` para que las esclavas impriman lo mismo.
+- La factura va **SOLO en bolívares**: montos tal como quedaron guardados en
+  la venta, nunca recalculados. La nota de entrega va en $ o Bs según la
+  moneda elegida: `NOTA DE ENTREGA`/`Nro. NE-…`, sin desglose de IVA, método
+  de pago ni tasas, y bloque RECIBIDO/FECHA/FIRMA fijo abajo a
+  la izquierda. La reimpresión respeta `venta.tipo_documento` (una factura
+  nunca sale como nota ni al revés). `tests/documento-venta.test.mjs` lo exige.
+- Al cerrar caja se imprime automáticamente un **reporte Z** (ventas del
+  día), también en hoja carta.
 
 ## Comandos
 
@@ -341,10 +418,12 @@ npm run dev:demo # Desarrollo + seeders de simulación
   modo solo lectura). NO: productos, entradas/ajustes, catálogos, usuarios,
   impresora/IVA/sistema, anular ventas.
 - **"Restablecer base de datos"** (Configuración, pide contraseña del Admin de
-  Sistema): `reiniciarBaseDeDatos()` en `db/connection.js` borra ventas, precios,
-  productos, clientes, proveedores, movimientos, cajas y tasas (lista
-  `TABLAS_OPERATIVAS`). Conserva categorías de productos y proveedores, usuarios,
-  roles, tipos de precio y `configuracion` (IVA, impresora).
+  Sistema): `reiniciarBaseDeDatos()` en `db/connection.js` borra solo la actividad
+  — ventas con detalle, cajas, cierres y tasas (lista `TABLAS_OPERATIVAS`) — y
+  libera `venta_id` de los movimientos conservados.
+  Conserva el catálogo cargado: productos (con precios y movimientos/stock),
+  clientes, proveedores, categorías de productos y proveedores, usuarios, roles,
+  tipos de precio y `configuracion` (IVA, impresora).
 - Al agregar un IPC de escritura: envolverlo con `conPermiso` y cubrirlo en el test
   `tests/roles.test.mjs` ("todos los IPC que modifican…").
 

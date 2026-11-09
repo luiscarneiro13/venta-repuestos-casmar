@@ -128,6 +128,7 @@ function generarEscenario(n) {
   const metodo = n % 2 === 0 ? 'bs' : 'usdt'
   const lineas = Array.from({ length: entre(1, 6) }, () => ({
     costo: rnd() < 0.15 ? elegir([0.01, 0.005, 1.005, 2.675, 0.125, 9999.99]) : conDecimales(0.01, 2500, entre(0, 4)),
+    costoConIva: rnd() < 0.3, // ~1/3 declara el costo con IVA incluido
     margenes: [1, 2, 3].map((t) => ({ tipoPrecioId: t, margen: rnd() < 0.2 ? elegir([0, 33.333, 12.5, 250]) : conDecimales(0, 300, entre(0, 3)) })),
     tipoPrecioId: entre(1, 3),
     cantidad: entre(1, 40),
@@ -140,7 +141,7 @@ function generarEscenario(n) {
 function vistaPrevia({ productos, ivaPct, metodo }) {
   const detallado = productos.map((p) => {
     const precio = listarPreciosPorProducto(p.productoId).find((x) => x.id === p.precioId)
-    const linea = calcularLinea(precio, p.cantidad, ivaPct)
+    const linea = calcularLinea(precio, p.cantidad, ivaPct, p.costoConIva)
     return { ...p, precio, linea }
   })
   const t = calcularTotales(detallado.map((d) => d.linea))
@@ -177,11 +178,11 @@ function ejecutarEscenario(esc) {
       const productoId = db
         .prepare('INSERT INTO productos (codigo, nombre) VALUES (?, ?)')
         .run(`QA-${esc.n}-${i}`, l.nombre).lastInsertRowid
-      registrarEntrada({ productoId, cantidad: 100, proveedorId, precioCompraUsd: l.costo, usuarioId, margenes: l.margenes })
+      registrarEntrada({ productoId, cantidad: 100, proveedorId, precioCompraUsd: l.costo, usuarioId, margenes: l.margenes, costoConIva: l.costoConIva })
       const precioId = db
         .prepare('SELECT id FROM precios WHERE producto_id = ? AND tipo_precio_id = ?')
         .get(productoId, l.tipoPrecioId).id
-      return { productoId, precioId, cantidad: l.cantidad, nombre: l.nombre }
+      return { productoId, precioId, cantidad: l.cantidad, nombre: l.nombre, costoConIva: l.costoConIva }
     })
 
     const preview = vistaPrevia({ productos, ivaPct: obtenerIva(), metodo: esc.metodo })

@@ -23,11 +23,11 @@
       </div>
       <div>
         <span class="field-label">Último costo de compra</span>
-        <strong class="num">{{ producto.precio_compra_usd == null ? '—' : formatUsd(producto.precio_compra_usd) }}</strong>
+        <strong class="num">{{ producto.precio_compra_usd == null ? '—' : formatUsd(producto.precio_compra_usd) }}<span v-if="costoConIva" class="muted" style="font-size: 11px; font-weight: 500; margin-left: 6px">(IVA incl.)</span></strong>
       </div>
     </div>
 
-    <h3 class="titulo-tabla">Precios de venta por tipo <span class="muted" style="font-size: 11px; font-weight: 500; margin-left: 8px">(sin IVA)</span></h3>
+    <h3 class="titulo-tabla">Precios de venta por tipo <span class="muted" style="font-size: 11px; font-weight: 500; margin-left: 8px">{{ costoConIva ? '(con IVA incluido)' : '(sin IVA)' }}</span></h3>
     <p v-if="cargandoPrecios" class="muted">Calculando precios…</p>
     <p v-else-if="errorPrecios" class="warning-box">{{ errorPrecios }}</p>
     <div v-else class="tabla-scroll">
@@ -39,20 +39,18 @@
             <th>Origen</th>
             <th style="text-align: right">Precio $</th>
             <th style="text-align: right">Precio Bs</th>
-            <th style="text-align: right">Precio USDT</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="p in precios" :key="p.tipoPrecioId">
             <td>{{ p.tipoPrecioNombre }}</td>
             <td class="num" style="text-align: right">{{ p.margen }}%</td>
-            <td><span class="tag" :class="p.margenOrigen === 'propio' ? 'tag-parcial' : 'tag-pendiente'">{{ p.margenOrigen === 'propio' ? 'Propio' : 'Por defecto' }}</span></td>
+            <td><span class="tag" :class="p.margenOrigen === 'propio' ? 'tag-parcial' : 'tag-pendiente'">{{ origenTexto(p) }}</span></td>
             <td class="num" style="text-align: right">{{ p.precioUsd == null ? '—' : formatUsd(p.precioUsd) }}</td>
             <td class="num" style="text-align: right">{{ formatMontoBs(p.precioBs) }}</td>
-            <td class="num" style="text-align: right">{{ formatMontoUsdt(p.precioUsdt) }}</td>
           </tr>
           <tr v-if="precios.length === 0">
-            <td colspan="6" class="muted">
+            <td colspan="5" class="muted">
               {{ producto.precio_compra_usd == null ? 'Sin costo de compra todavía: los precios nacen de la primera entrada.' : 'No hay tipos de precio activos.' }}
             </td>
           </tr>
@@ -82,7 +80,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import BaseModal from './BaseModal.vue'
-import { formatUsd, formatMontoBs, formatMontoUsdt } from '../composables/useFormato'
+import { formatUsd, formatMontoBs } from '../composables/useFormato'
 import { mensajeError } from '../composables/useErrores'
 
 const props = defineProps({
@@ -98,12 +96,18 @@ const precios = ref([])
 const cargandoPrecios = ref(true)
 const errorPrecios = ref('')
 
+// Indica si el margen vigente pertenece al producto o al tipo de precio.
+function origenTexto(p) {
+  return p.margenOrigen === 'propio' ? 'Propio' : 'Por defecto'
+}
+
 // stock_bajo lo calcula el backend; se mantiene la regla local como
 // respaldo (stock <= mínimo cuando el mínimo es > 0).
 const stockBajo = computed(() =>
   Boolean(props.producto.stock_bajo) ||
   ((props.producto.stock_minimo ?? 0) > 0 && props.producto.stock <= props.producto.stock_minimo)
 )
+const costoConIva = computed(() => Number(props.producto.costo_con_iva) === 1)
 
 async function cargarPrecios() {
   cargandoPrecios.value = true

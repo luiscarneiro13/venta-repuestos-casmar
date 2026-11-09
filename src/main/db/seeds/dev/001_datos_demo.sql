@@ -51,20 +51,25 @@ FROM (
 ) m
 WHERE productos.codigo = m.codigo AND productos.categoria_id IS NULL;
 
--- Precios: cada producto con los tres tipos, margen propio y valor_usd
--- materializado = round2(costo × (1 + margen/100)).
-INSERT OR IGNORE INTO precios (producto_id, tipo_precio_id, valor_usd, margen, descripcion)
+-- Precios: cada producto con los tres tipos, margen propio (Bs y USDT) y
+-- bases materializadas = round2(costo × (1 + margen/100)).
+INSERT OR IGNORE INTO precios (producto_id, tipo_precio_id, valor_usd, valor_usdt, margen, margen_usdt, descripcion)
 SELECT p.id, tp.id,
        ROUND(p.precio_compra_usd * (1 + m.margen / 100.0), 2),
-       m.margen, m.descripcion
+       ROUND(p.precio_compra_usd * (1 + m.margen_usdt / 100.0), 2),
+       m.margen, m.margen_usdt, m.descripcion
 FROM productos p
 JOIN (
-  SELECT 'Precio Full' AS tipo, 100 AS margen, 'Venta al público' AS descripcion
-  UNION ALL SELECT 'Precio Especial', 80, 'Talleres afiliados'
-  UNION ALL SELECT 'Precio Interno', 60, 'Consumo interno / cortesía'
+  SELECT 'Precio Full' AS tipo, 100 AS margen, 100 AS margen_usdt, 'Venta al público' AS descripcion
+  UNION ALL SELECT 'Precio Especial', 80, 80, 'Talleres afiliados'
+  UNION ALL SELECT 'Precio Interno', 60, 60, 'Consumo interno / cortesía'
 ) m
 JOIN tipos_precio tp ON tp.nombre = m.tipo
 WHERE p.precio_compra_usd IS NOT NULL;
+
+-- BDs demo ya creadas antes de la migración 025: completar las columnas.
+UPDATE precios SET margen_usdt = margen WHERE margen_usdt IS NULL AND margen IS NOT NULL;
+UPDATE precios SET valor_usdt = valor_usd WHERE valor_usdt IS NULL AND valor_usd IS NOT NULL;
 
 -- Existencia inicial (una entrada por producto sin movimientos previos); el
 -- movimiento conserva el costo_usd de esa compra.

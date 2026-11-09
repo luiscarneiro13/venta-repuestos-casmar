@@ -68,13 +68,19 @@ async function manejar(req, res, version) {
       return responder(res, 401, { ok: false, error: 'La sesión no existe: vuelve a iniciar sesión' })
     }
     const { canal, args = [] } = await leerJson(req)
+    // El proxy serializa los argumentos `undefined` como centinela porque
+    // JSON los convertiría en null; aquí se restauran para que los
+    // defaults de los handlers (`= {}`) funcionen igual que en local.
+    const argsReales = (Array.isArray(args) ? args : []).map(
+      (a) => (a && typeof a === 'object' && a.__undefined_arg__ === true ? undefined : a)
+    )
     // auth:* no va por invoke: login/logout tienen endpoint propio y no
     // deben tocar la sesión local de la ventana del servidor.
     if (typeof canal === 'string' && canal.startsWith('auth:')) {
       return responder(res, 400, { ok: false, error: `Canal no permitido: ${canal}` })
     }
     try {
-      const data = await ejecutarCanal(canal, args, usuario)
+      const data = await ejecutarCanal(canal, argsReales, usuario)
       return responder(res, 200, { ok: true, data })
     } catch (error) {
       const mensaje = error.message || 'Error del servidor'

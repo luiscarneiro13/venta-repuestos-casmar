@@ -1,7 +1,7 @@
 import { getDb } from '../db/connection.js'
 import * as productosRepo from '../repositories/productos.repo.js'
 import * as preciosRepo from '../repositories/precios.repo.js'
-import { aplicarMargenesDeProducto } from './precios.service.js'
+import { aplicarMargenesDeProducto, rematerializarPrecios } from './precios.service.js'
 import { repoCategorias } from '../repositories/categorias.repo.js'
 
 const categoriasProductoRepo = repoCategorias('categorias_producto')
@@ -59,6 +59,19 @@ export function obtenerProducto(id) {
   return producto
 }
 
+// El costo de compra se corrige desde la edición del producto además de con
+// cada entrada: vacío = sin costo; si viene un valor debe ser > 0. Devuelve
+// null o el número, y undefined si el campo no se envió.
+function normalizarCosto(precioCompraUsd) {
+  if (precioCompraUsd === undefined) return undefined
+  if (precioCompraUsd === null || precioCompraUsd === '') return null
+  const numero = Number(precioCompraUsd)
+  if (!Number.isFinite(numero) || numero <= 0) {
+    throw new Error('El precio de compra debe ser mayor que cero (o vacío para quitarlo)')
+  }
+  return Math.round(numero * 100) / 100
+}
+
 // Los márgenes son dato del producto (la entrada es solo el atajo operativo):
 // si vienen, se guardan como margen propio y se rematerializa valor_usd con
 // el costo registrado, sin generar movimiento de inventario.
@@ -85,9 +98,22 @@ export function actualizarProducto(id, producto) {
   const actual = productosRepo.buscarPorId(id)
   if (!actual) throw new Error('El producto no existe')
   const datos = { ...normalizarProducto(producto), categoriaId: normalizarCategoria(producto.categoriaId, actual.categoria_id) }
+  const costo = normalizarCosto(producto.precioCompraUsd)
+  // El flag "costo con IVA incluido" es editable junto al costo. undefined =
+  // no se envió (se conserva); al quitar el costo el flag queda en 0.
+  const conIva = producto.costoConIva === undefined ? undefined : (producto.costoConIva ? 1 : 0)
   try {
     return getDb().transaction(() => {
       productosRepo.actualizar(id, datos)
+      // Costo corregido a mano: se guarda como vigente y se recalculan los
+      // precios materializados con los márgenes que correspondan (los enviados
+      // o los ya guardados). Sin costo los precios conservan su último valor.
+      if (costo !== undefined) {
+        productosRepo.actualizarPrecioCompra(id, costo, costo == null ? 0 : (conIva ?? actual.costo_con_iva ?? 0))
+        if (producto.margenes === undefined && costo != null) rematerializarPrecios(id, costo)
+      } else if (conIva !== undefined) {
+        productosRepo.actualizarCostoConIva(id, conIva)
+      }
       aplicarMargenesSiVienen(id, producto.margenes)
       return obtenerProducto(id)
     })()

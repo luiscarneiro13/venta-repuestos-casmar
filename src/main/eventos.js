@@ -6,7 +6,7 @@ import { BrowserWindow } from './electron-safe.js'
 // la vista se suscribe al grupo que le afecta ('ventas', 'catalogo', ...).
 const GRUPOS = {
   ventas: ['ventas:crear', 'ventas:anular'],
-  inventario: ['inventario:registrarEntrada', 'inventario:registrarAjusteSalida', 'inventario:editarMovimiento'],
+  inventario: ['inventario:registrarEntrada', 'inventario:registrarAjusteSalida', 'inventario:editarMovimiento', 'inventario:anularMovimiento'],
   catalogo: [
     'productos:crear', 'productos:actualizar', 'productos:eliminar', 'productos:reactivar',
     'tiposPrecio:crear', 'tiposPrecio:actualizar', 'tiposPrecio:eliminar',

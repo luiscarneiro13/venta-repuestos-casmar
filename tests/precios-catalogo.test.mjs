@@ -72,6 +72,25 @@ test('producto sin costo aparece con precios en null', () => {
   }
 })
 
+test('precio único usa el valor Bs/BCV sin modificar inventario ni precios guardados anteriores', () => {
+  const db = base()
+  const usuarioId = adminId(db)
+  registrarTasa({ valorBcv: 100, valorUsdt: 120, usuarioId })
+  const { productoId, proveedorId } = crearProductoConProveedor(db)
+  registrarEntrada({ productoId, cantidad: 7, proveedorId, precioCompraUsd: 100, usuarioId, margenes: [] })
+  const original = db.prepare('SELECT id, valor_usd, valor_usdt, margen, margen_usdt FROM precios WHERE producto_id = ? LIMIT 1').get(productoId)
+  db.prepare('UPDATE precios SET margen_usdt = 150, valor_usdt = 250 WHERE id = ?').run(original.id)
+  const antes = db.prepare('SELECT COUNT(*) AS movimientos, MAX(saldo) AS saldo FROM inventario_movimientos WHERE producto_id = ?').get(productoId)
+
+  const precio = listarPreciosPorProducto(productoId).find((p) => p.id === original.id)
+  assert.equal(precio.precioUsd, original.valor_usd)
+  assert.equal(precio.margen, original.margen)
+  assert.equal(precio.margenUsdt, precio.margen)
+  assert.equal(precio.precioUsdt, Math.round(precio.precioBs / 120 * 100) / 100)
+  assert.deepEqual(db.prepare('SELECT COUNT(*) AS movimientos, MAX(saldo) AS saldo FROM inventario_movimientos WHERE producto_id = ?').get(productoId), antes)
+  assert.equal(db.prepare('SELECT valor_usdt FROM precios WHERE id = ?').get(original.id).valor_usdt, 250)
+})
+
 test('un tipo creado después de la entrada se materializa al listar y queda vendible', () => {
   const db = base()
   const usuarioId = adminId(db)

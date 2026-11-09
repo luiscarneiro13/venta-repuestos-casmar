@@ -2,11 +2,13 @@ import { getDb } from '../db/connection.js'
 
 const SELECT_VENTA = `
   SELECT v.id, v.numero_ticket, v.cliente_id, v.usuario_id, v.tasa_valor,
-         v.tasa_bcv, v.tasa_usdt, v.metodo_pago, v.tipo_documento,
+         v.tasa_bcv, v.tasa_usdt, v.metodo_pago, v.tipo_documento, v.nota_moneda, v.nota_con_iva,
          v.iva_porcentaje, v.iva_usd, v.iva_bs, v.iva_usdt,
          v.total_usd, v.total_bs, v.total_usdt, v.estado, v.creado_en, v.anulado_en, v.anulado_motivo,
          v.anulado_por_usuario_id,
          c.nombre AS cliente_nombre, c.numero_documento AS cliente_doc,
+         c.tipo_documento AS cliente_tipo_doc, c.telefono AS cliente_telefono,
+         c.direccion AS cliente_direccion,
          u.nombre AS usuario_nombre,
          ua.nombre AS usuario_anulacion_nombre
   FROM ventas v
@@ -171,7 +173,7 @@ export function anular(id, { motivo, usuarioId }) {
 // `tasaBcv` y `tasaUsdt` son la tasa vigente al momento de la venta;
 // `tasaValor` recibe la BCV para que reportes y lectores viejos sigan
 // funcionando igual.
-export function crear({ clienteId, usuarioId, tasaBcv, tasaUsdt, metodoPago, tipoDocumento = 'factura', ivaPorcentaje, ivaUsd, ivaBs, ivaUsdt, totalUsd, totalBs, totalUsdt, items }) {
+export function crear({ clienteId, usuarioId, tasaBcv, tasaUsdt, metodoPago, tipoDocumento = 'factura', notaMoneda = null, notaConIva = null, ivaPorcentaje, ivaUsd, ivaBs, ivaUsdt, totalUsd, totalBs, totalUsdt, items }) {
   const db = getDb()
 
   const crearEnTransaccion = db.transaction(() => {
@@ -180,11 +182,11 @@ export function crear({ clienteId, usuarioId, tasaBcv, tasaUsdt, metodoPago, tip
       .prepare(
         `INSERT INTO ventas
            (numero_ticket, cliente_id, usuario_id, tasa_valor, tasa_bcv, tasa_usdt, metodo_pago, tipo_documento,
-            iva_porcentaje, iva_usd, iva_bs, iva_usdt,
+            nota_moneda, nota_con_iva, iva_porcentaje, iva_usd, iva_bs, iva_usdt,
             total_usd, total_bs, total_usdt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(numeroTicket, clienteId, usuarioId, tasaBcv, tasaBcv, tasaUsdt, metodoPago, tipoDocumento, ivaPorcentaje, ivaUsd, ivaBs, ivaUsdt, totalUsd, totalBs, totalUsdt)
+      .run(numeroTicket, clienteId, usuarioId, tasaBcv, tasaBcv, tasaUsdt, metodoPago, tipoDocumento, notaMoneda, notaConIva, ivaPorcentaje, ivaUsd, ivaBs, ivaUsdt, totalUsd, totalBs, totalUsdt)
 
     const ventaId = info.lastInsertRowid
     const insertarDetalle = db.prepare(

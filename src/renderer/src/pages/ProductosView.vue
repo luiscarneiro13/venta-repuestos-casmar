@@ -55,6 +55,7 @@
               <th>Código de barra</th>
               <th>Nombre</th>
               <th>Marca</th>
+              <th>Descripción</th>
               <th>Categoría</th>
               <th style="text-align: right">Cantidad</th>
               <th style="text-align: right">Mínimo</th>
@@ -95,6 +96,7 @@
               <td class="num">{{ p.codigo_barras || '—' }}</td>
               <td>{{ p.nombre }}</td>
               <td>{{ p.marca || '—' }}</td>
+              <td class="col-descripcion" :title="p.descripcion || ''">{{ p.descripcion || '—' }}</td>
               <td>
                 <span v-if="p.categoria_nombre" class="tag tag-parcial">{{ p.categoria_nombre }}</span>
                 <span v-else class="muted">—</span>
@@ -105,16 +107,13 @@
               <td v-for="t in tiposActivos" :key="t.id" style="text-align: right">
                 <span v-if="precioDe(p.id, t.id)?.precioUsd != null" class="precio-tabla">
                   <strong>{{ formatMontoBs(precioDe(p.id, t.id).precioBs) }}</strong>
-                  <small>
-                    ≈ {{ formatUsd(precioDe(p.id, t.id).precioUsd) }}
-                    <template v-if="precioDe(p.id, t.id).precioUsdt != null"> · {{ formatMontoUsdt(precioDe(p.id, t.id).precioUsdt) }}</template>
-                  </small>
+                  <small>{{ formatUsd(precioDe(p.id, t.id).precioUsd) }}</small>
                 </span>
                 <span v-else class="muted">—</span>
               </td>
             </tr>
             <tr v-if="productosFiltrados.length === 0">
-              <td :colspan="9 + tiposActivos.length" class="muted celda-vacia">
+              <td :colspan="10 + tiposActivos.length" class="muted celda-vacia">
                 <template v-if="busqueda.trim()">
                   No se encontró «{{ busqueda.trim() }}».
                   <button v-if="puedeGestionar" class="btn btn-outline btn-crear-busqueda" type="button" @click="abrirCrear(busqueda.trim())">
@@ -143,7 +142,7 @@
       @movimientos="verMovimientos"
     />
 
-    <BaseModal v-if="modal.abierto" :extra-wide="Boolean(modal.id)" :title="modal.id ? 'Editar producto' : 'Nuevo producto'" @close="cerrarEdicion">
+    <BaseModal v-if="modal.abierto" xl :title="modal.id ? 'Editar producto' : 'Nuevo producto'" @close="cerrarEdicion">
       <template #icon>
         <span class="modal-icono">
           <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -215,7 +214,7 @@
         </div>
         <input id="prod-descripcion" v-model="form.descripcion" class="input" placeholder="Ej. Compatible con Corolla 1.8, rosca M20" />
       </div>
-      <div class="form-grid">
+      <div class="form-grid" :class="{ 'form-grid-costo': modal.id }">
         <div class="login-field">
           <div class="label-fila">
             <label class="field-label" for="prod-minimo">Inventario mínimo</label>
@@ -230,6 +229,22 @@
             />
             <button type="button" aria-label="Aumentar" tabindex="-1" @click="ajustarMinimo(1)">+</button>
           </div>
+        </div>
+        <div v-if="modal.id" class="login-field">
+          <div class="label-fila">
+            <label class="field-label" for="prod-costo">Precio de compra (USD)</label>
+            <span class="hint">Costo actual</span>
+          </div>
+          <input
+            id="prod-costo"
+            :value="form.costoUsd"
+            class="input num"
+            inputmode="numeric"
+            placeholder="0,00"
+            @keydown="bloquearNoDigitos"
+            @input="onCostoInput"
+          />
+          <small class="costo-hint">(Ingrese el costo sin IVA)</small>
         </div>
         <div class="login-field">
           <div class="label-fila">
@@ -252,14 +267,13 @@
         <template v-else>
           <MargenesTabla
             :filas="margenes"
-            :costo-usd="form.costoUsd"
+            :costo-usd="costoUsdNumero"
             :tasa-bcv="tasas.bcv"
-            :tasa-usdt="tasas.usdt"
           />
           <p class="muted" style="font-size: 11px; margin: 6px 0 0">
-            Los precios se calculan sobre el último costo de compra
-            ({{ form.costoUsd == null ? 'sin costo todavía' : formatUsd(form.costoUsd) }}).
-            Un solo % de utilidad por tipo — es el mismo en ambos métodos y editable desde cualquiera.
+            Los precios se recalculan sobre este costo de compra
+            ({{ costoUsdNumero == null ? 'sin costo — conservan su último valor' : formatUsd(costoUsdNumero) }}).
+            Cada método tiene su % de utilidad, independiente del otro.
           </p>
         </template>
       </div>
@@ -292,6 +306,14 @@
       @saved="entradaGuardada"
     />
 
+    <MovimientosProductoModal
+      v-if="movimientosProducto"
+      :key="movimientosProducto.id"
+      :producto="movimientosProducto"
+      @close="movimientosProducto = null"
+      @actualizado="cargarTodo"
+    />
+
     <ConfirmModal
       v-if="confirmEliminar.abierto"
       title="Eliminar producto"
@@ -305,19 +327,18 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import BaseModal from '../components/BaseModal.vue'
 import ConfirmModal from '../components/ConfirmModal.vue'
 import EntradaProductoModal from '../components/EntradaProductoModal.vue'
+import MovimientosProductoModal from '../components/MovimientosProductoModal.vue'
 import ProductoFichaModal from '../components/ProductoFichaModal.vue'
 import MargenesTabla from '../components/MargenesTabla.vue'
 import SearchSelect from '../components/SearchSelect.vue'
 import { puedeHacer } from '../composables/usePermisos'
-import { formatUsd, formatMontoBs, formatMontoUsdt } from '../composables/useFormato'
+import { formatUsd, formatMontoBs } from '../composables/useFormato'
+import { aplicarMascaraTasa, bloquearNoDigitos, mascaraTasaDesdeNumero } from '../composables/useMascaras'
 import { exportarXlsx } from '../composables/useExportarXlsx'
 import { mensajeError } from '../composables/useErrores'
-
-const router = useRouter()
 
 // Vendedor: consulta el catálogo y la ficha, pero no crea, edita, elimina
 // productos ni registra entradas (el backend lo rechaza igualmente).
@@ -370,7 +391,7 @@ const productosFiltrados = computed(() => {
     if (categoriaFiltro.value && p.categoria_id !== categoriaFiltro.value) return false
     if (!palabras.length) return true
     const texto = normalizar(
-      `${p.nombre} ${p.codigo || ''} ${p.codigo_barras || ''} ${p.marca || ''} ${p.ubicacion || ''} ${p.categoria_nombre || ''}`
+      `${p.nombre} ${p.codigo || ''} ${p.codigo_barras || ''} ${p.marca || ''} ${p.ubicacion || ''} ${p.categoria_nombre || ''} ${p.descripcion || ''}`
     )
     return palabras.every((x) => texto.includes(x))
   })
@@ -420,11 +441,13 @@ function abrirFicha(p) {
   fichaProducto.value = p
 }
 
-// La ficha no muestra los movimientos (son muchos): lleva a la pantalla de
-// operaciones con el producto ya seleccionado.
+// La ficha no muestra los movimientos (son muchos): los abre en un modal
+// grande sobre el catálogo, con las entradas editables ahí mismo.
+const movimientosProducto = ref(null)
+
 function verMovimientos(producto) {
   fichaProducto.value = null
-  router.push({ path: '/operaciones-inventario', query: { producto: producto.id } })
+  movimientosProducto.value = producto
 }
 
 // ---------- formulario crear/editar ----------
@@ -439,8 +462,24 @@ const form = reactive({
   ubicacion: '',
   categoriaId: null,
   stockMinimo: '0',
-  costoUsd: null
+  costoUsd: ''
 })
+
+// Costo del input como número para la tabla de márgenes y para guardar:
+// vacío o inválido = sin costo (null). El texto lleva la máscara "1234,56".
+const costoUsdNumero = computed(() => {
+  const numero = Number(String(form.costoUsd).replace(',', '.'))
+  return Number.isFinite(numero) && numero > 0 ? numero : null
+})
+
+// Misma máscara de monto del costo en las entradas: solo dígitos, los dos
+// últimos son los decimales.
+function onCostoInput(event) {
+  const digitos = event.target.value.replace(/\D/g, '').replace(/^0+/, '')
+  const { texto } = digitos ? aplicarMascaraTasa(digitos) : { texto: '' }
+  form.costoUsd = texto
+  event.target.value = texto
+}
 
 // El stepper mueve el mínimo de a 1 sin soltar el foco del formulario.
 function ajustarMinimo(delta) {
@@ -462,7 +501,7 @@ function resetForm() {
     ubicacion: '',
     categoriaId: null,
     stockMinimo: '0',
-    costoUsd: null
+    costoUsd: ''
   })
   margenes.value = []
   margenesCargados.value = false
@@ -497,7 +536,10 @@ async function cargarFilasMargenes(productoId) {
       nombre: p.tipoPrecioNombre,
       margen: p.margen,
       margenTexto: String(p.margen),
-      origen: p.margenOrigen === 'propio' ? 'propio' : 'default'
+      origen: p.margenOrigen === 'propio' ? 'propio' : 'default',
+      margenUsdt: p.margenUsdt ?? p.margen,
+      margenUsdtTexto: String(p.margenUsdt ?? p.margen),
+      origenUsdt: p.margenUsdtOrigen === 'propio' ? 'propio' : 'default'
     }))
   } catch {
     return tipos.value
@@ -507,7 +549,10 @@ async function cargarFilasMargenes(productoId) {
         nombre: t.nombre,
         margen: t.margen_default ?? 100,
         margenTexto: String(t.margen_default ?? 100),
-        origen: 'default'
+        origen: 'default',
+        margenUsdt: t.margen_default ?? 100,
+        margenUsdtTexto: String(t.margen_default ?? 100),
+        origenUsdt: 'default'
       }))
   }
 }
@@ -541,7 +586,7 @@ async function abrirEditar(producto) {
       ubicacion: completo.ubicacion || '',
       categoriaId: completo.categoria_id ?? null,
       stockMinimo: String(completo.stock_minimo ?? 0),
-      costoUsd: completo.precio_compra_usd ?? null
+      costoUsd: completo.precio_compra_usd == null ? '' : mascaraTasaDesdeNumero(completo.precio_compra_usd).texto
     })
     Object.assign(modal, { abierto: true, id: producto.id, error: '', guardando: false, cargandoMargenes: true })
     const [, filas] = await Promise.all([cargarTasas(), cargarFilasMargenes(producto.id)])
@@ -565,6 +610,10 @@ async function guardar(registrarEntrada = false) {
     modal.error = 'El inventario mínimo debe ser un entero mayor o igual a 0.'
     return
   }
+  if (String(form.costoUsd).trim() !== '' && costoUsdNumero.value == null) {
+    modal.error = 'El precio de compra debe ser un número mayor que cero (o vacío para quitarlo).'
+    return
+  }
   const datos = {
     codigo: form.codigo,
     codigoBarras: form.codigoBarras,
@@ -575,6 +624,12 @@ async function guardar(registrarEntrada = false) {
     ubicacion: form.ubicacion,
     categoriaId: form.categoriaId,
     stockMinimo: minimo
+  }
+  // Al editar se envía el costo tal como quedó en el campo (null si quedó
+  // vacío): el backend recalcula los precios materializados con él.
+  if (modal.id) {
+    datos.precioCompraUsd = costoUsdNumero.value
+    datos.costoConIva = false
   }
   // Solo se envían los márgenes si terminaron de cargar: mandar una tabla
   // vacía haría que el backend sobrescriba los márgenes propios con el
@@ -666,7 +721,7 @@ async function exportarExcel() {
   try {
     const encabezados = ['Referencia / Nro. parte', 'Código de barra', 'Nombre', 'Marca', 'Categoría', 'Descripción', 'Ubicación', 'Cantidad', 'Mínimo', 'Costo compra (USD)']
     for (const t of tiposActivos.value) {
-      encabezados.push(`${t.nombre} (USD)`, `${t.nombre} (Bs)`, `${t.nombre} (USDT)`)
+      encabezados.push(`${t.nombre} (USD)`, `${t.nombre} (Bs)`)
     }
     const filas = productosFiltrados.value.map((p) => {
       const base = [
@@ -675,7 +730,7 @@ async function exportarExcel() {
       ]
       for (const t of tiposActivos.value) {
         const precio = precioDe(p.id, t.id)
-        base.push(precio?.precioUsd ?? null, precio?.precioBs ?? null, precio?.precioUsdt ?? null)
+        base.push(precio?.precioUsd ?? null, precio?.precioBs ?? null)
       }
       return base
     })
@@ -697,6 +752,12 @@ onMounted(cargarTodo)
 </script>
 
 <style scoped>
+.costo-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
 .titulo-tabla {
   margin: 0;
   padding: 12px 16px;
@@ -779,9 +840,27 @@ onMounted(cargarTodo)
 .filtro-categoria {
   width: 240px;
 }
+.col-descripcion {
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0 12px;
+  gap: 0 20px;
+}
+/* En edición la fila del mínimo se parte: mínimo ¼ + costo ¼ + ubicación ½. */
+.form-grid-costo {
+  grid-template-columns: 1fr 1fr 2fr;
+}
+@media (max-width: 640px) {
+  .form-grid,
+  .form-grid-costo {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

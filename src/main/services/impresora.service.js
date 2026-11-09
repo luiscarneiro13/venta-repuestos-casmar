@@ -1,19 +1,18 @@
 import * as configuracionRepo from '../repositories/configuracion.repo.js'
+import * as configuracionService from './configuracion.service.js'
 import * as ventasRepo from '../repositories/ventas.repo.js'
 import * as cajaRepo from '../repositories/caja.repo.js'
 import * as tasasRepo from '../repositories/tasas.repo.js'
 import {
   imprimirPruebaLocal,
-  imprimirTicketsVentaLocal,
-  previsualizarTicketVentaLocal,
+  imprimirDocumentosVentaLocal,
+  previsualizarDocumentoVentaLocal,
   imprimirReporteZLocal
 } from './impresora.acciones.js'
 import {
-  esPlataformaSoportada,
-  listarImpresorasDelSistema
-} from '../printer/ticket.printer.js'
-
-const ANCHOS = ['58mm', '80mm']
+  documentosDisponibles,
+  listarImpresorasDocumento
+} from '../printer/documento.printer.js'
 
 // Unidades vendidas en el conjunto de ventas (suma de cantidades de sus items).
 const contarUnidades = (ventas) =>
@@ -22,32 +21,31 @@ const contarUnidades = (ventas) =>
 export function obtenerConfiguracion() {
   return {
     nombre: configuracionRepo.obtener('impresora_nombre'),
-    ancho: configuracionRepo.obtener('impresora_ancho') || '80mm',
-    plataformaSoportada: esPlataformaSoportada()
+    plataformaSoportada: documentosDisponibles()
   }
 }
 
-export function guardarConfiguracion({ nombre, ancho }) {
-  if (ancho && !ANCHOS.includes(ancho)) {
-    throw new Error('El ancho de papel debe ser 58mm o 80mm')
-  }
+// La impresora configurada es la de oficina (hoja carta); se identifica por
+// el nombre tal como aparece instalada en el sistema operativo.
+export function guardarConfiguracion({ nombre }) {
   configuracionRepo.guardar('impresora_nombre', (nombre || '').trim() || null)
-  if (ancho) configuracionRepo.guardar('impresora_ancho', ancho)
   return obtenerConfiguracion()
 }
 
 export async function listarImpresoras() {
-  return listarImpresorasDelSistema()
+  return listarImpresorasDocumento()
 }
 
-// ---------- Datos para tickets/reportes ----------
+// ---------- Datos para documentos/reportes ----------
 // Separados de la impresión para que una PC esclava pueda pedir los datos por
-// HTTP (impresora:datos*) y armar + imprimir el ticket en SU impresora.
+// HTTP (impresora:datos*) y armar + imprimir el documento en SU impresora.
+// Los datos del negocio van incluidos: el documento impreso en cualquier PC
+// lleva el mismo encabezado.
 
 export function datosTicketVenta(ventaId) {
   const venta = ventasRepo.buscarPorId(ventaId)
   if (!venta) return null
-  return { venta, items: ventasRepo.detalleDeVenta(ventaId) }
+  return { venta, items: ventasRepo.detalleDeVenta(ventaId), negocio: configuracionService.obtenerNegocio() }
 }
 
 export function datosReporteCierre(cajaId) {
@@ -65,7 +63,8 @@ export function datosReporteCierre(cajaId) {
     ventas,
     tasaBcv: caja.tasa_cierre || caja.tasa_apertura,
     tasaUsdt: caja.tasa_cierre_usdt || caja.tasa_apertura_usdt || caja.tasa_cierre || caja.tasa_apertura,
-    totalUnidades: contarUnidades(ventas)
+    totalUnidades: contarUnidades(ventas),
+    negocio: configuracionService.obtenerNegocio()
   }
 }
 
@@ -83,31 +82,31 @@ export function datosReporteDiario(fecha) {
   const tasaBcv = Number(tasaDelDia?.valor_bcv ?? tasaDelDia?.valor ?? ultimaVenta?.tasa_bcv ?? ultimaVenta?.tasa_valor) || 0
   const tasaUsdt = Number(tasaDelDia?.valor_usdt ?? ultimaVenta?.tasa_usdt ?? ultimaVenta?.tasa_valor) || 0
 
-  return { ventas, tasaBcv, tasaUsdt, totalUnidades: contarUnidades(ventas) }
+  return { ventas, tasaBcv, tasaUsdt, totalUnidades: contarUnidades(ventas), negocio: configuracionService.obtenerNegocio() }
 }
 
 // ---------- Impresión en la impresora DE ESTA PC ----------
 
 export async function imprimirPrueba() {
-  return imprimirPruebaLocal(obtenerConfiguracion())
+  return imprimirPruebaLocal({ ...obtenerConfiguracion(), negocio: configuracionService.obtenerNegocio() })
 }
 
-// Imprime (o reimprime) los 2 tickets de una venta ya guardada: la copia
-// del cliente (con "Gracias por su compra") y la copia de la tienda (sin
-// ese mensaje). Nunca lanza: el resultado se devuelve para que la UI avise
-// si no se pudo imprimir.
-export async function imprimirTicketsVenta(ventaId) {
+// Imprime (o reimprime) el documento de una venta ya guardada en hoja carta.
+// `copias`: 1 = solo ORIGINAL; 2 = ORIGINAL + COPIA (la copia lleva línea de
+// firma). Nunca lanza: el resultado se devuelve para que la UI avise si no
+// se pudo imprimir.
+export async function imprimirTicketsVenta(ventaId, copias = 2) {
   const datos = datosTicketVenta(ventaId)
   if (!datos) return { ok: false, error: 'La venta no existe' }
-  return imprimirTicketsVentaLocal(datos, obtenerConfiguracion())
+  return imprimirDocumentosVentaLocal(datos, obtenerConfiguracion(), copias)
 }
 
-// Vista previa en texto del ticket (copia del cliente), para poder revisar la
-// maqueta sin gastar papel ni tener la impresora conectada.
+// Vista previa del documento como HTML (copia ORIGINAL), para poder revisar
+// la maqueta o mostrarla en pantalla sin gastar papel.
 export function previsualizarTicketVenta(ventaId) {
   const datos = datosTicketVenta(ventaId)
   if (!datos) throw new Error('La venta no existe')
-  return previsualizarTicketVentaLocal(datos, obtenerConfiguracion().ancho)
+  return previsualizarDocumentoVentaLocal(datos)
 }
 
 // Imprime el reporte diario (reporte Z) de las ventas del turno de la caja

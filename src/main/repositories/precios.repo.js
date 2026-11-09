@@ -1,8 +1,10 @@
 import { getDb } from '../db/connection.js'
 
 const SELECT_BASE = `
-  SELECT p.id, p.producto_id, p.tipo_precio_id, p.valor_usd, p.margen, p.descripcion, p.activo,
+  SELECT p.id, p.producto_id, p.tipo_precio_id, p.valor_usd, p.valor_usdt,
+         p.margen, p.margen_usdt, p.descripcion, p.activo,
          pr.nombre AS producto_nombre, pr.codigo AS producto_codigo,
+         pr.costo_con_iva AS producto_costo_con_iva,
          tp.nombre AS tipo_precio_nombre, tp.orden AS tipo_precio_orden, tp.margen_default
   FROM precios p
   JOIN productos pr ON pr.id = p.producto_id
@@ -33,7 +35,7 @@ export function listarCatalogoTiposConMargen() {
       `SELECT pr.id AS producto_id, pr.precio_compra_usd,
               tp.id AS tipo_precio_id, tp.nombre AS tipo_precio_nombre, tp.orden AS tipo_precio_orden,
               tp.margen_default,
-              p.id AS precio_id, p.margen, p.valor_usd
+              p.id AS precio_id, p.margen, p.margen_usdt, p.valor_usd, p.valor_usdt
        FROM productos pr
        CROSS JOIN tipos_precio tp
        LEFT JOIN precios p ON p.tipo_precio_id = tp.id AND p.producto_id = pr.id
@@ -51,7 +53,8 @@ export function listarTiposConMargen(productoId) {
     .prepare(
       `SELECT tp.id AS tipo_precio_id, tp.nombre AS tipo_precio_nombre, tp.orden AS tipo_precio_orden,
               tp.margen_default,
-              p.id AS precio_id, p.margen, p.valor_usd, p.activo AS precio_activo
+              p.id AS precio_id, p.margen, p.margen_usdt, p.valor_usd, p.valor_usdt,
+              p.activo AS precio_activo
        FROM tipos_precio tp
        LEFT JOIN precios p ON p.tipo_precio_id = tp.id AND p.producto_id = ?
        WHERE tp.activo = 1
@@ -61,26 +64,36 @@ export function listarTiposConMargen(productoId) {
 }
 
 // Inserta o actualiza el precio materializado de un producto para un tipo:
-// margen propio + valor_usd = round2(costo × (1 + margen/100)), activo = 1.
-// Devuelve el id de la fila (RETURNING).
-export function upsertPrecio(productoId, { tipoPrecioId, margen, valorUsd }) {
+// margenes propios (Bs y USDT) + bases en $ materializadas
+// (valor_usd = round2(costo×(1+margen/100)), valor_usdt = lo propio con
+// margen_usdt), activo = 1. Devuelve el id de la fila (RETURNING).
+export function upsertPrecio(productoId, { tipoPrecioId, margen, margenUsdt, valorUsd, valorUsdt }) {
   return getDb()
     .prepare(
-      `INSERT INTO precios (producto_id, tipo_precio_id, valor_usd, margen, activo)
-       VALUES (?, ?, ?, ?, 1)
+      `INSERT INTO precios (producto_id, tipo_precio_id, valor_usd, valor_usdt, margen, margen_usdt, activo)
+       VALUES (?, ?, ?, ?, ?, ?, 1)
        ON CONFLICT (producto_id, tipo_precio_id)
-       DO UPDATE SET valor_usd = excluded.valor_usd, margen = excluded.margen, activo = 1
+       DO UPDATE SET valor_usd = excluded.valor_usd, valor_usdt = excluded.valor_usdt,
+                     margen = excluded.margen, margen_usdt = excluded.margen_usdt, activo = 1
        RETURNING id`
     )
-    .get(productoId, tipoPrecioId, valorUsd, margen)?.id
+    .get(productoId, tipoPrecioId, valorUsd, valorUsdt, margen, margenUsdt)?.id
 }
 
-// Actualiza solo el margen propio de una fila existente (sin tocar el precio
-// materializado). Se usa cuando el producto aún no tiene costo registrado.
-export function actualizarMargen(productoId, tipoPrecioId, margen) {
+// Actualiza solo los márgenes propios de una fila existente (sin tocar los
+// precios materializados). Se usa cuando el producto aún no tiene costo
+// registrado.
+export function actualizarMargen(productoId, tipoPrecioId, margen, margenUsdt) {
   getDb()
-    .prepare('UPDATE precios SET margen = ? WHERE producto_id = ? AND tipo_precio_id = ?')
-    .run(margen, productoId, tipoPrecioId)
+    .prepare('UPDATE precios SET margen = ?, margen_usdt = ? WHERE producto_id = ? AND tipo_precio_id = ?')
+    .run(margen, margenUsdt, productoId, tipoPrecioId)
+}
+
+// Actualiza solo las bases materializadas de una fila (sin tocar los
+// márgenes propios). Se usa cuando cambia el costo vigente por una
+// corrección o anulación de entrada.
+export function actualizarValores(precioId, valorUsd, valorUsdt) {
+  getDb().prepare('UPDATE precios SET valor_usd = ?, valor_usdt = ? WHERE id = ?').run(valorUsd, valorUsdt, precioId)
 }
 
 // Desactiva las filas de precios del producto cuyo tipo quedó inactivo: no se
@@ -96,20 +109,24 @@ export function desactivarDeTiposInactivos(productoId) {
 }
 
 // Recalcula el valor_usd materializado de las filas que usan el margen por
-// defecto del tipo (margen IS NULL) cuando cambia margen_default. Solo toca
-// productos con costo conocido; los demás conservan su valor anterior.
+// defecto del tipo (margen IS NULL) cuando cambia margen_default. valor_usdt
+// se recalcula con su margen efectivo (propio USDT o el que hereda). Solo
+// toca productos con costo conocido; los demás conservan su valor anterior.
 export function recalcularValorUsdDefault(tipoPrecioId, margenDefault) {
   getDb()
     .prepare(
       `UPDATE precios
        SET valor_usd = ROUND(
          (SELECT pr.precio_compra_usd FROM productos pr WHERE pr.id = precios.producto_id)
-           * (1 + ? / 100.0), 2)
+           * (1 + ? / 100.0), 2),
+       valor_usdt = ROUND(
+         (SELECT pr.precio_compra_usd FROM productos pr WHERE pr.id = precios.producto_id)
+           * (1 + COALESCE(margen_usdt, ?) / 100.0), 2)
        WHERE tipo_precio_id = ?
          AND margen IS NULL
          AND (SELECT pr.precio_compra_usd FROM productos pr WHERE pr.id = precios.producto_id) IS NOT NULL`
     )
-    .run(margenDefault, tipoPrecioId)
+    .run(margenDefault, margenDefault, tipoPrecioId)
 }
 
 // LEGADO — modelo anterior de precios fijos. Reemplaza el juego de precios de

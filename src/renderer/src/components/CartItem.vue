@@ -9,7 +9,7 @@
         <span class="price" :class="{ 'sin-precio': !item.precio }">
           <template v-if="item.precio && item.linea">
             {{ formatMontoBs(item.linea.unitarioConIva.bs) }} c/u
-            <span class="muted equiv">≈ {{ formatMontoUsdt(item.linea.unitarioConIva.usdt) }} ({{ item.linea.unitarioConIva.usd == null ? '—' : formatUsd(item.linea.unitarioConIva.usd) }})</span>
+            <small class="muted equiv">{{ item.linea.unitarioConIva.usd == null ? '—' : formatUsd(item.linea.unitarioConIva.usd) }} c/u</small>
           </template>
           <template v-else>Selecciona un precio →</template>
         </span>
@@ -46,7 +46,7 @@
       <template v-if="item.precio && item.linea">
         {{ formatMontoBs(item.linea.total.bs) }}
         <div class="muted equiv-sub">
-          ≈ {{ item.linea.total.usdt == null ? '—' : formatMontoUsdt(item.linea.total.usdt) }}
+          {{ item.linea.total.usd == null ? '—' : formatUsd(item.linea.total.usd) }}
         </div>
       </template>
       <template v-else>—</template>
@@ -55,7 +55,7 @@
 </template>
 
 <script setup>
-import { formatMontoBs, formatMontoUsdt, formatUsd } from '../composables/useFormato'
+import { formatMontoBs, formatUsd } from '../composables/useFormato'
 
 const props = defineProps({
   item: { type: Object, required: true },

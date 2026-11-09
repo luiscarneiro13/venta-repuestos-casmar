@@ -123,9 +123,15 @@ export function usuarioCliente() {
   return getSesionCliente()?.usuario ?? null
 }
 
-// Proxy de un canal al servidor (equivale a ipcRenderer.invoke del servidor).
+// JSON no puede llevar `undefined` (lo convierte en null), así que cada
+// argumento indefinido viaja como un centinela que el servidor restaura:
+// sin esto, llamar un canal sin argumentos (ej. productos.listar()) le
+// llegaba al handler como null y rompía los defaults `= {}`.
+export const CENTINELA_UNDEFINED = '__undefined_arg__'
+
 export async function invocarRemoto(canal, args = []) {
-  const datos = await post('/api/invoke', { canal, args }, getSesionCliente()?.token)
+  const serializados = args.map((a) => (a === undefined ? { [CENTINELA_UNDEFINED]: true } : a))
+  const datos = await post('/api/invoke', { canal, args: serializados }, getSesionCliente()?.token)
   return datos.data
 }
 

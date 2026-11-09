@@ -84,7 +84,7 @@ const api = {
     guardar: (datos) => ipcRenderer.invoke('impresora:guardar', datos),
     listar: () => ipcRenderer.invoke('impresora:listar'),
     probar: () => ipcRenderer.invoke('impresora:probar'),
-    imprimirVenta: (ventaId) => ipcRenderer.invoke('impresora:imprimirVenta', ventaId),
+    imprimirVenta: (ventaId, copias) => ipcRenderer.invoke('impresora:imprimirVenta', ventaId, copias),
     previsualizar: (ventaId) => ipcRenderer.invoke('impresora:previsualizar', ventaId),
     imprimirReporteCierre: (cajaId, usuarioNombre) =>
       ipcRenderer.invoke('impresora:imprimirReporteCierre', cajaId, usuarioNombre),
@@ -105,11 +105,14 @@ const api = {
     registrarEntrada: (datos) => ipcRenderer.invoke('inventario:registrarEntrada', datos),
     registrarAjusteSalida: (datos) => ipcRenderer.invoke('inventario:registrarAjusteSalida', datos),
     editarMovimiento: (datos) => ipcRenderer.invoke('inventario:editarMovimiento', datos),
+    anularMovimiento: (id) => ipcRenderer.invoke('inventario:anularMovimiento', id),
     unidadesHoy: () => ipcRenderer.invoke('inventario:unidadesHoy')
   },
   configuracion: {
     obtenerIva: () => ipcRenderer.invoke('configuracion:obtenerIva'),
-    guardarIva: (porcentaje) => ipcRenderer.invoke('configuracion:guardarIva', porcentaje)
+    guardarIva: (porcentaje) => ipcRenderer.invoke('configuracion:guardarIva', porcentaje),
+    obtenerNegocio: () => ipcRenderer.invoke('configuracion:obtenerNegocio'),
+    guardarNegocio: (datos) => ipcRenderer.invoke('configuracion:guardarNegocio', datos)
   },
   appConfig: {
     obtener: () => ipcRenderer.invoke('appConfig:obtener'),

@@ -29,6 +29,7 @@
           inputmode="numeric" placeholder="0,00"
           @keydown="bloquearNoDigitos" @input="onMontoInput(compra, $event)"
         />
+        <small class="costo-hint">(Ingrese el costo sin IVA)</small>
       </div>
     </div>
 
@@ -39,11 +40,9 @@
         :filas="margenes"
         :costo-usd="compra.valorUsd"
         :tasa-bcv="tasas.bcv"
-        :tasa-usdt="tasas.usdt"
       />
       <p class="muted" style="font-size: 11px; margin: 6px 0 0">
-        Un solo % de utilidad sobre el costo — es el mismo en ambos métodos y editable desde cualquiera.
-        Precio $ = costo × (1 + %) · Precio Bs = precio $ × BCV · Precio USDT = precio Bs ÷ Binance.
+        Precio $ = costo × (1 + % utilidad) · Precio Bs = precio $ × BCV.
       </p>
     </div>
 
@@ -108,7 +107,10 @@ async function cargarFilasMargenes(id) {
       nombre: p.tipoPrecioNombre,
       margen: p.margen,
       margenTexto: String(p.margen),
-      origen: p.margenOrigen === 'propio' ? 'propio' : 'default'
+      origen: p.margenOrigen === 'propio' ? 'propio' : 'default',
+      margenUsdt: p.margenUsdt ?? p.margen,
+      margenUsdtTexto: String(p.margenUsdt ?? p.margen),
+      origenUsdt: p.margenUsdtOrigen === 'propio' ? 'propio' : 'default'
     }))
   } catch {
     const tipos = await window.api.tiposPrecio.listar()
@@ -119,7 +121,10 @@ async function cargarFilasMargenes(id) {
         nombre: t.nombre,
         margen: t.margen_default ?? 100,
         margenTexto: String(t.margen_default ?? 100),
-        origen: 'default'
+        origen: 'default',
+        margenUsdt: t.margen_default ?? 100,
+        margenUsdtTexto: String(t.margen_default ?? 100),
+        origenUsdt: 'default'
       }))
   }
 }
@@ -162,7 +167,10 @@ async function cargarFilasMargenesSinProducto() {
       nombre: t.nombre,
       margen: t.margen_default ?? 100,
       margenTexto: String(t.margen_default ?? 100),
-      origen: 'default'
+      origen: 'default',
+      margenUsdt: t.margen_default ?? 100,
+      margenUsdtTexto: String(t.margen_default ?? 100),
+      origenUsdt: 'default'
     }))
 }
 
@@ -216,6 +224,7 @@ async function guardar() {
       proveedorId: proveedorId.value,
       motivo: nota.value.trim(),
       precioCompraUsd: compra.value.valorUsd,
+      costoConIva: false,
       margenes: margenes.value.map((f) => ({ tipoPrecioId: f.tipoPrecioId, margen: f.margen })),
       usuarioId: session.usuario.id
     })
@@ -258,6 +267,12 @@ onMounted(async () => {
 }
 .proveedor-label { justify-content: space-between; gap: 10px; }
 .proveedor-label .field-label { margin: 0; }
+.costo-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
 .agregar-proveedor { min-height: 24px; padding: 0 10px; font-size: 11px; }
 @media (max-width: 720px) {
   .col-producto, .col-cantidad, .col-proveedor, .col-costo { grid-column: 1 / -1; }

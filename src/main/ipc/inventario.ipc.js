@@ -12,5 +12,7 @@ export function registerInventarioIpc() {
     inventarioService.registrarAjusteSalida(datos)))
   registrar('inventario:editarMovimiento', conPermiso('inventario.gestionar', (_event, datos) =>
     inventarioService.editarMovimientoInventario(datos)))
+  registrar('inventario:anularMovimiento', conPermiso('inventario.gestionar', (_event, id) =>
+    inventarioService.anularMovimientoInventario(id)))
   registrar('inventario:unidadesHoy', () => inventarioService.unidadesVendidasHoy())
 }

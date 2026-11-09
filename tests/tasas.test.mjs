@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { afterEach, test } from 'node:test'
 import { nuevaBaseEnMemoria } from './helpers/db.mjs'
 import { registrarTasa, obtenerTasaDeHoy, obtenerUltimaTasa } from '../src/main/services/tasas.service.js'
@@ -18,7 +19,7 @@ afterEach(() => {
 
 const adminId = (db) => db.prepare("SELECT id FROM usuarios WHERE usuario = 'admin'").get().id
 
-test('registrarTasa exige los dos valores numéricos y mayores a 0', () => {
+test('registrarTasa exige ambas tasas positivas e independientes', () => {
   const db = base()
   const usuarioId = adminId(db)
   assert.throws(() => registrarTasa({ valorBcv: 100, usuarioId }), /tasa USDT/i)
@@ -74,4 +75,18 @@ test('sin tasas registradas devuelve null', () => {
   base()
   assert.equal(obtenerUltimaTasa(), null)
   assert.equal(obtenerTasaDeHoy(), null)
+})
+
+test('la tasa USDT se ingresa por separado y nunca se reemplaza por BCV en la interfaz', () => {
+  const app = readFileSync(new URL('../src/renderer/src/App.vue', import.meta.url), 'utf8')
+  const topBar = readFileSync(new URL('../src/renderer/src/components/TopBar.vue', import.meta.url), 'utf8')
+  const ventas = readFileSync(new URL('../src/renderer/src/pages/VentasView.vue', import.meta.url), 'utf8')
+  for (const vista of [app, topBar]) {
+    assert.match(vista, /Tasa BCV/)
+    assert.match(vista, /Tasa USDT/)
+    assert.match(vista, /registrar\(\{ valorBcv, valorUsdt, usuarioId: session\.usuario\.id \}\)/)
+    assert.doesNotMatch(vista, /registrar\(\{ valorBcv, usuarioId:/)
+  }
+  assert.match(ventas, /tasasDelDia\.usdt = tasaHoy\?\.valor_usdt/)
+  assert.match(ventas, /tasaCierreUsdt: tasaUsdt/)
 })

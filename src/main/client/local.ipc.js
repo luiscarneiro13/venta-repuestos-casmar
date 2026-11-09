@@ -6,11 +6,11 @@ import { obtenerConfig, guardarConfig } from '../config.js'
 import { invocarRemoto, loginCliente, logoutCliente, usuarioCliente } from './proxy.js'
 import {
   imprimirPruebaLocal,
-  imprimirTicketsVentaLocal,
-  previsualizarTicketVentaLocal,
+  imprimirDocumentosVentaLocal,
+  previsualizarDocumentoVentaLocal,
   imprimirReporteZLocal
 } from '../services/impresora.acciones.js'
-import { esPlataformaSoportada, listarImpresorasDelSistema } from '../printer/ticket.printer.js'
+import { documentosDisponibles, listarImpresorasDocumento } from '../printer/documento.printer.js'
 
 // Canales que en el esclavo se ejecutan LOCALMENTE (no se proxean al
 // servidor): auth (maneja el token), config de red (archivo local),
@@ -45,33 +45,33 @@ function registrarAuthLocal() {
 
 function registrarImpresoraLocal() {
   reemplazar('impresora:configuracion', () => ({
-    ...cfgImpresora(),
-    plataformaSoportada: esPlataformaSoportada()
+    nombre: cfgImpresora().nombre ?? null,
+    plataformaSoportada: documentosDisponibles()
   }))
 
-  reemplazar('impresora:guardar', conPermiso('configuracion.gestionar', (_event, { nombre, ancho } = {}) => {
-    if (ancho && !['58mm', '80mm'].includes(ancho)) {
-      throw new Error('El ancho de papel debe ser 58mm o 80mm')
-    }
+  reemplazar('impresora:guardar', conPermiso('configuracion.gestionar', (_event, { nombre } = {}) => {
     const cfg = guardarConfig({
-      impresora: { nombre: (nombre || '').trim() || null, ...(ancho ? { ancho } : {}) }
+      impresora: { nombre: (nombre || '').trim() || null }
     })
-    return { ...cfg.impresora, plataformaSoportada: esPlataformaSoportada() }
+    return { nombre: cfg.impresora.nombre ?? null, plataformaSoportada: documentosDisponibles() }
   }))
 
-  reemplazar('impresora:listar', () => listarImpresorasDelSistema())
-  reemplazar('impresora:probar', () => imprimirPruebaLocal(cfgImpresora()))
+  reemplazar('impresora:listar', () => listarImpresorasDocumento())
+  reemplazar('impresora:probar', async () => {
+    const negocio = await invocarRemoto('configuracion:obtenerNegocio').catch(() => null)
+    return imprimirPruebaLocal({ nombre: cfgImpresora().nombre, negocio })
+  })
 
-  reemplazar('impresora:imprimirVenta', async (_event, ventaId) => {
+  reemplazar('impresora:imprimirVenta', async (_event, ventaId, copias) => {
     const datos = await invocarRemoto('impresora:datosTicketVenta', [ventaId])
     if (!datos) return { ok: false, error: 'La venta no existe' }
-    return imprimirTicketsVentaLocal(datos, cfgImpresora())
+    return imprimirDocumentosVentaLocal(datos, cfgImpresora(), copias)
   })
 
   reemplazar('impresora:previsualizar', async (_event, ventaId) => {
     const datos = await invocarRemoto('impresora:datosTicketVenta', [ventaId])
     if (!datos) throw new Error('La venta no existe')
-    return previsualizarTicketVentaLocal(datos, cfgImpresora().ancho)
+    return previsualizarDocumentoVentaLocal(datos)
   })
 
   reemplazar('impresora:imprimirReporteCierre', async (_event, cajaId, usuarioNombre) => {

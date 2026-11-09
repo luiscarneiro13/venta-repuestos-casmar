@@ -47,10 +47,11 @@
   </header>
 
   <BaseModal v-if="modalAbierto" title="Actualizar tasas del día" @close="modalAbierto = false">
-    <label class="field-label">Tasa BCV (Bs/USD)</label>
+    <label class="field-label" for="topbar-tasa-bcv">Tasa BCV (Bs/USD)</label>
     <div class="tasa-row">
       <span class="prefix">1 USD =</span>
       <input
+        id="topbar-tasa-bcv"
         :value="tasaBcvDisplay"
         type="text"
         inputmode="numeric"
@@ -60,10 +61,11 @@
       />
       <span class="prefix">Bs</span>
     </div>
-    <label class="field-label" style="margin-top: 12px">Tasa USDT Binance (Bs/USDT)</label>
+    <label class="field-label" for="topbar-tasa-usdt" style="margin-top: 12px">Tasa USDT (Bs/USDT)</label>
     <div class="tasa-row">
       <span class="prefix">1 USDT =</span>
       <input
+        id="topbar-tasa-usdt"
         :value="tasaUsdtDisplay"
         type="text"
         inputmode="numeric"

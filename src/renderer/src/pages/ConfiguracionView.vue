@@ -46,6 +46,15 @@
         </div>
         <div class="config-card-name">Impuestos (IVA)</div>
       </button>
+      <button class="card config-card" @click="abrirModalNegocio">
+        <div class="config-card-icon">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M3 21h18M5 21V7l7-4 7 4v14" />
+            <path d="M9 21v-6h6v6" />
+          </svg>
+        </div>
+        <div class="config-card-name">Datos del negocio</div>
+      </button>
       <button class="card config-card" @click="abrirModalBackup">
         <div class="config-card-icon">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -62,10 +71,11 @@
     <BaseModal v-if="modalReset.abierto" title="Restablecer base de datos" @close="cerrarModalReset">
       <template v-if="!resetEnProgreso">
         <p style="font-size: 12.5px; margin-bottom: 16px">
-          Se borrarán todas las ventas, precios, productos, clientes, proveedores, movimientos
-          de inventario, cajas y tasas: la base de datos queda desde cero.<br /><br />
-          <strong>No se tocan</strong>: categorías de productos y de proveedores, usuarios, roles,
-          tipos de precio ni la configuración (IVA e impresora). Esta acción no se puede deshacer.
+          Se borrarán todas las ventas con su detalle, las cajas, cierres de caja y tasas de
+          cambio: la actividad del negocio queda desde cero.<br /><br />
+          <strong>No se tocan</strong>: productos (con sus precios y existencias), clientes,
+          proveedores, categorías de productos y de proveedores, usuarios, roles, tipos de precio
+          ni la configuración (IVA e impresora). Esta acción no se puede deshacer.
         </p>
         <div class="login-field">
           <label class="field-label">Contraseña del Admin de Sistema</label>
@@ -138,6 +148,45 @@
         <button class="btn btn-outline" type="button" @click="modalIva.abierto = false">Cancelar</button>
         <button class="btn btn-primary" type="button" :disabled="modalIva.guardando" @click="guardarIva">
           {{ modalIva.guardando ? 'Guardando…' : 'Guardar' }}
+        </button>
+      </template>
+    </BaseModal>
+
+    <BaseModal v-if="modalNegocio.abierto" title="Datos del negocio" @close="modalNegocio.abierto = false">
+      <template #icon>
+        <span class="modal-icono">
+          <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path d="M3 21h18M5 21V7l7-4 7 4v14" />
+            <path d="M9 21v-6h6v6" />
+          </svg>
+        </span>
+      </template>
+      <template #subtitle>
+        <p class="modal-subtitulo">Se imprimen en el encabezado de facturas, notas de entrega y reportes.</p>
+      </template>
+      <div class="login-field">
+        <label class="field-label">Nombre del negocio</label>
+        <input v-model="modalNegocio.nombre" class="input" type="text" placeholder="Ej. Repuestos El Torno C.A." />
+      </div>
+      <div class="login-field">
+        <label class="field-label">RIF</label>
+        <input v-model="modalNegocio.rif" class="input" type="text" placeholder="Ej. J-12345678-9" />
+      </div>
+      <div class="login-field">
+        <label class="field-label">Dirección</label>
+        <input v-model="modalNegocio.direccion" class="input" type="text" placeholder="Ej. Av. Principal, Local 5, Ciudad" />
+      </div>
+      <div class="login-field">
+        <label class="field-label">Teléfono</label>
+        <input v-model="modalNegocio.telefono" class="input" type="text" placeholder="Ej. 0414-000-0000" @keyup.enter="guardarNegocio" />
+      </div>
+      <p v-if="modalNegocio.error" style="color: var(--danger); font-size: 10.5px; margin-top: -8px">
+        {{ modalNegocio.error }}
+      </p>
+      <template #footer>
+        <button class="btn btn-outline" type="button" @click="modalNegocio.abierto = false">Cancelar</button>
+        <button class="btn btn-primary" type="button" :disabled="modalNegocio.guardando" @click="guardarNegocio">
+          {{ modalNegocio.guardando ? 'Guardando…' : 'Guardar' }}
         </button>
       </template>
     </BaseModal>
@@ -242,6 +291,43 @@ async function guardarIva() {
     modalIva.error = e.message || 'No se pudo guardar el porcentaje'
   } finally {
     modalIva.guardando = false
+  }
+}
+
+// --- Datos del negocio (encabezado de los documentos impresos) ---
+const modalNegocio = reactive({
+  abierto: false,
+  nombre: '',
+  rif: '',
+  direccion: '',
+  telefono: '',
+  error: '',
+  guardando: false
+})
+
+async function abrirModalNegocio() {
+  modalNegocio.abierto = true
+  modalNegocio.error = ''
+  try {
+    Object.assign(modalNegocio, await window.api.configuracion.obtenerNegocio())
+  } catch { /* quedan los campos vacíos */ }
+}
+
+async function guardarNegocio() {
+  modalNegocio.guardando = true
+  modalNegocio.error = ''
+  try {
+    await window.api.configuracion.guardarNegocio({
+      nombre: modalNegocio.nombre,
+      rif: modalNegocio.rif,
+      direccion: modalNegocio.direccion,
+      telefono: modalNegocio.telefono
+    })
+    modalNegocio.abierto = false
+  } catch (e) {
+    modalNegocio.error = e.message || 'No se pudieron guardar los datos'
+  } finally {
+    modalNegocio.guardando = false
   }
 }
 

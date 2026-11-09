@@ -67,22 +67,18 @@ export function backupDb(destino) {
 // inventario, cajas, tasas) sin tocar usuarios, clientes, productos, precios
 // ni configuración. Se ejecuta dentro de una transacción para que sea
 // atómica.
-// Reinicia la base de datos "desde cero": borra todos los datos operativos
-// (ventas, precios, productos, clientes, proveedores, movimientos de
-// inventario, cajas y tasas). NO toca la estructura de trabajo: categorías de
-// productos y de proveedores, usuarios, roles, tipos de precio ni la
-// configuración (IVA, impresora).
+// Reinicia la base de datos "desde cero": borra solo la actividad del negocio
+// (ventas con su detalle, cajas, cierres de caja y tasas de cambio).
+// NO toca el catálogo ni la estructura de trabajo: productos (con sus precios
+// y movimientos de inventario), clientes, proveedores, categorías de productos
+// y de proveedores, usuarios, roles, tipos de precio ni la configuración
+// (IVA, impresora).
 const TABLAS_OPERATIVAS = [
   'venta_detalle',
   'ventas',
-  'inventario_movimientos',
   'cajas',
   'cierres_caja',
-  'tasas_cambio',
-  'precios',
-  'productos',
-  'clientes',
-  'proveedores'
+  'tasas_cambio'
 ]
 
 export function reiniciarBaseDeDatos() {
@@ -93,6 +89,9 @@ export function reiniciarBaseDeDatos() {
       for (const tabla of TABLAS_OPERATIVAS) {
         db.exec(`DELETE FROM ${tabla}; DELETE FROM sqlite_sequence WHERE name = '${tabla}'`)
       }
+      // Los movimientos se conservan pero sus ventas ya no existen: se suelta
+      // la referencia (el motivo "Anulación T-XXXX" queda como texto igual).
+      db.exec('UPDATE inventario_movimientos SET venta_id = NULL WHERE venta_id IS NOT NULL')
     })()
   } finally {
     db.pragma('foreign_keys = ON')

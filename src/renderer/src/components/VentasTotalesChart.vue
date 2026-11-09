@@ -16,7 +16,7 @@
               </div>
             </div>
             <div class="bar-group">
-              <div class="bar-value" :title="`${formatUsd(d.total_usd)} ≈ ${formatMontoBs(d.total_bs)}`">
+              <div class="bar-value" :title="`${formatUsd(d.total_usd)} = ${formatMontoBs(d.total_bs)}`">
                 {{ formatUsd(d.total_usd) }}
                 <small v-if="d.total_bs != null" class="bar-value-bs">{{ formatMontoBs(d.total_bs) }}</small>
               </div>

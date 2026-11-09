@@ -5,7 +5,7 @@ import * as preciosRepo from '../repositories/precios.repo.js'
 import * as tasasRepo from '../repositories/tasas.repo.js'
 import * as configuracionService from './configuracion.service.js'
 import { redondear2 } from './precios.calculo.js'
-import { calcularLinea, calcularTotales } from '../../shared/venta.calculo.js'
+import { calcularLinea, calcularLineaNota, calcularTotales } from '../../shared/venta.calculo.js'
 
 const METODOS_PAGO = ['bs', 'usdt']
 // 'factura' cobra el IVA configurado; 'nota_entrega' es igual pero SIN IVA.
@@ -89,11 +89,19 @@ export function anularVenta(id, motivo, usuarioId) {
 // renderer. `metodoPago` es 'bs' (default) o 'usdt'; el Bs es canónico e igual
 // en ambos métodos — en USDT el cliente paga total_usdt (= Bs ÷ tasa Binance,
 // el redondeo lo absorbe el USDT).
-export function crearVenta({ clienteId, usuarioId, metodoPago, tipoDocumento, items, totalesEsperados }) {
+export function crearVenta({ clienteId, usuarioId, metodoPago, tipoDocumento, notaMoneda, notaConIva, items, totalesEsperados }) {
   const tipo = tipoDocumento == null ? 'factura' : String(tipoDocumento)
   if (!TIPOS_DOCUMENTO.includes(tipo)) {
     throw new Error("El tipo de documento debe ser 'factura' o 'nota_entrega'")
   }
+  // Opciones propias de la nota (se congelan en la venta para reimprimir
+  // igual): moneda del documento y si cobra con IVA embebido o la base.
+  const esNota = tipo === 'nota_entrega'
+  const moneda = !esNota ? null : notaMoneda == null ? 'usd' : String(notaMoneda)
+  if (esNota && !['bs', 'usd'].includes(moneda)) {
+    throw new Error("La moneda de la nota de entrega debe ser 'bs' o 'usd'")
+  }
+  const notaIva = !esNota ? null : notaConIva === undefined || notaConIva === null ? 1 : (notaConIva ? 1 : 0)
   if (!usuarioId) {
     throw new Error('Falta el usuario que registra la venta')
   }
@@ -114,9 +122,11 @@ export function crearVenta({ clienteId, usuarioId, metodoPago, tipoDocumento, it
     throw new Error('La venta debe tener al menos un producto')
   }
 
-  // IVA general vigente (se congela en la venta). La nota de entrega no
-  // lleva IVA: mismo cálculo con 0%, así total = subtotal.
-  const ivaPorcentaje = tipo === 'nota_entrega' ? 0 : configuracionService.obtenerIva()
+  // IVA general vigente (se congela en la venta). La nota de entrega NUNCA
+  // desglosa IVA (iva_porcentaje 0): con nota_con_iva=1 cobra el precio con
+  // IVA embebido (igual que la factura), con 0 cobra la base sin impuesto.
+  const ivaConfiguradoPct = configuracionService.obtenerIva()
+  const ivaPorcentaje = esNota ? 0 : ivaConfiguradoPct
 
   // El precio unitario se toma de la BD (no del renderer) y se congela en la
   // venta junto con el nombre del producto, el tipo de precio y el margen
@@ -135,8 +145,17 @@ export function crearVenta({ clienteId, usuarioId, metodoPago, tipoDocumento, it
     }
     const precioUsd = precio.valor_usd
     const precioBs = redondear2(precioUsd * tasaBcv)
-    const precioUsdt = redondear2(precioBs / tasaUsdt)
-    const linea = calcularLinea({ precioUsd, precioBs, precioUsdt }, cantidad, ivaPorcentaje)
+    // El precio USDT tiene base propia: valor_usdt = costo×(1+%USDT). En
+    // filas sin esa base (datos viejos) se deriva del Bs como siempre.
+    const precioUsdt = redondear2(redondear2(precioUsd * tasaBcv) / tasaUsdt)
+    // El costo del producto puede traer el IVA incluido (costo_con_iva):
+    // entonces el precio materializado ya ES el precio con IVA — la
+    // factura desglosa base + IVA hacia atrás en vez de sumarle impuesto.
+    const ivaIncluido = Number(precio.producto_costo_con_iva) === 1
+    const precioLinea = { precioUsd, precioBs, precioUsdt }
+    const linea = esNota
+      ? calcularLineaNota(precioLinea, cantidad, ivaConfiguradoPct, ivaIncluido, notaIva === 1)
+      : calcularLinea(precioLinea, cantidad, ivaPorcentaje, ivaIncluido)
     lineas.push(linea)
     return {
       precioId: precio.id,
@@ -150,6 +169,8 @@ export function crearVenta({ clienteId, usuarioId, metodoPago, tipoDocumento, it
       subtotalUsd: linea.subtotal.usd,
       subtotalBs: linea.subtotal.bs,
       subtotalUsdt: linea.subtotal.usdt,
+      // Snapshot del % aplicado según el método de pago: en USDT puede ser
+      // un margen propio distinto del de Bs.
       margenUtilidad: precio.margen ?? precio.margen_default
     }
   })
@@ -209,6 +230,8 @@ export function crearVenta({ clienteId, usuarioId, metodoPago, tipoDocumento, it
       tasaUsdt,
       metodoPago: metodo,
       tipoDocumento: tipo,
+      notaMoneda: moneda,
+      notaConIva: notaIva,
       ivaPorcentaje,
       ivaUsd,
       ivaBs,

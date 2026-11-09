@@ -7,7 +7,7 @@ export function registerImpresoraIpc() {
   registrar('impresora:guardar', conPermiso('configuracion.gestionar', (_event, datos) => impresoraService.guardarConfiguracion(datos)))
   registrar('impresora:listar', () => impresoraService.listarImpresoras())
   registrar('impresora:probar', () => impresoraService.imprimirPrueba())
-  registrar('impresora:imprimirVenta', (_event, ventaId) => impresoraService.imprimirTicketsVenta(ventaId))
+  registrar('impresora:imprimirVenta', (_event, ventaId, copias) => impresoraService.imprimirTicketsVenta(ventaId, copias))
   registrar('impresora:previsualizar', (_event, ventaId) => impresoraService.previsualizarTicketVenta(ventaId))
   registrar('impresora:imprimirReporteCierre', (_event, cajaId, usuarioNombre) =>
     impresoraService.imprimirReporteCierre(cajaId, usuarioNombre)

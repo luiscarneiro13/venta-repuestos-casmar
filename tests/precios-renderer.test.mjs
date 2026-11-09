@@ -9,22 +9,28 @@ test('r2 redondea a 2 decimales una sola vez', () => {
 })
 
 test('ejemplo del cliente: costo 1000, margen 100%, BCV 100, Binance 120', () => {
-  const { precioUsd, precioBs, precioUsdt } = calcularPrecios(1000, 100, 100, 120)
+  const { precioUsd, precioBs, precioUsdt } = calcularPrecios(1000, 100, null, 100, 120)
   assert.equal(precioUsd, 2000)
   assert.equal(precioBs, 200000)
   assert.equal(precioUsdt, 1666.67)
 })
 
-test('margen 0% vende al costo y el USDT siempre es Bs ÷ Binance', () => {
-  const { precioUsd, precioBs, precioUsdt } = calcularPrecios(50, 0, 100, 120)
+test('margen 0% vende al costo y con % iguales el USDT es Bs ÷ Binance', () => {
+  const { precioUsd, precioBs, precioUsdt } = calcularPrecios(50, 0, null, 100, 120)
   assert.equal(precioUsd, 50)
   assert.equal(precioBs, 5000)
   assert.equal(precioUsdt, 41.67)
 })
 
+test('margen USDT propio mueve solo el precio en divisas', () => {
+  const { precioBs, precioUsdt } = calcularPrecios(1000, 100, 150, 100, 120)
+  assert.equal(precioBs, 200000)
+  assert.equal(precioUsdt, 2083.33)
+})
+
 test('sin tasa vigente el precio en esa moneda queda null', () => {
-  assert.deepEqual(calcularPrecios(10, 100, null, null), { precioUsd: 20, precioBs: null, precioUsdt: null })
-  assert.deepEqual(calcularPrecios(10, 100, 100, 0), { precioUsd: 20, precioBs: 2000, precioUsdt: null })
+  assert.deepEqual(calcularPrecios(10, 100, null, null, null), { precioUsd: 20, precioBs: null, precioUsdt: null })
+  assert.deepEqual(calcularPrecios(10, 100, null, 100, 0), { precioUsd: 20, precioBs: 2000, precioUsdt: null })
 })
 
 test('parseMargen acepta coma o punto y rechaza negativos e inválidos', () => {

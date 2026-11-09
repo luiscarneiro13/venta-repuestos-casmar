@@ -33,8 +33,7 @@
 
   <BaseModal v-if="modalTasa.abierto" title="Tasas del día" :cerrable="false">
     <p class="tasa-hint">
-      Ingresa las dos tasas de hoy. Se usan para calcular los precios en bolívares
-      (pago en Bs) y el equivalente en USDT (pago en divisas) de todas las ventas del día.
+      Ingresa las tasas BCV y USDT del día. Solo la BCV se usa para calcular los precios de los productos.
     </p>
     <div class="login-field">
       <label class="field-label" for="tasa-bcv">Tasa BCV (Bs/USD) *</label>
@@ -54,7 +53,7 @@
       </div>
     </div>
     <div class="login-field">
-      <label class="field-label" for="tasa-usdt">Tasa USDT Binance (Bs/USDT) *</label>
+      <label class="field-label" for="tasa-usdt">Tasa USDT (Bs/USDT) *</label>
       <div class="tasa-row">
         <span class="prefix">1 USDT =</span>
         <input
@@ -178,7 +177,7 @@ async function continuarConTasaYApertura() {
     ultimaTasa ? (ultimaTasa.valor_bcv ?? ultimaTasa.valor) : session.tasa
   )
   const { texto: textoUsdt } = mascaraTasaDesdeNumero(
-    ultimaTasa ? (ultimaTasa.valor_usdt ?? ultimaTasa.valor) : session.tasaUsdt
+    ultimaTasa ? (ultimaTasa.valor_usdt ?? ultimaTasa.valor_bcv ?? ultimaTasa.valor) : session.tasaUsdt
   )
   tasaBcvDisplay.value = textoBcv
   tasaUsdtDisplay.value = textoUsdt

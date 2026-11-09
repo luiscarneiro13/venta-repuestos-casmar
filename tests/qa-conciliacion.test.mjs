@@ -93,8 +93,11 @@ function montarEscenario(az, n) {
       .run(`QA-${n}-${i}`, `Producto QA ${n}-${i}`).lastInsertRowid
     const costo = generarCosto(az)
     const margenes = tipos.map((tipoPrecioId) => ({ tipoPrecioId, margen: generarMargen(az) }))
-    registrarEntrada({ productoId, cantidad: 100000, proveedorId, precioCompraUsd: costo, usuarioId, margenes })
-    productos.push({ productoId, costo, margenes })
+    // ~1/3 de los productos declara el costo con el IVA ya incluido: su
+    // precio materializado ES el precio con IVA (la factura lo desglosa).
+    const costoConIva = az.rnd() < 0.34
+    registrarEntrada({ productoId, cantidad: 100000, proveedorId, precioCompraUsd: costo, usuarioId, margenes, costoConIva })
+    productos.push({ productoId, costo, margenes, costoConIva })
   }
   const clienteId = crearCliente({ nombre: `Cliente QA ${n}` }).id
   return { usuarioId, clienteId, tasas, iva, productos }
@@ -127,8 +130,8 @@ function simularPantalla(carrito) {
       precioId: precio.id,
       cantidad: item.cantidad,
       precio,
-      card: calcularLinea(precio, 1, ivaPorcentaje), // PriceCard
-      linea: calcularLinea(precio, item.cantidad, ivaPorcentaje) // línea del carrito
+      card: calcularLinea(precio, 1, ivaPorcentaje, item.costoConIva), // PriceCard
+      linea: calcularLinea(precio, item.cantidad, ivaPorcentaje, item.costoConIva) // línea del carrito
     }
   })
   const totales = calcularTotales(lineas.map((l) => l.linea))

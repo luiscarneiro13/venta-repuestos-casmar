@@ -10,7 +10,7 @@ const SUBQUERY_STOCK = `COALESCE((
 
 const SELECT_BASE = `
   SELECT p.id, p.codigo, p.codigo_barras, p.nombre, p.marca, p.descripcion, p.unidad_medida, p.ubicacion,
-         p.precio_compra_usd, p.stock_minimo, p.activo,
+         p.precio_compra_usd, p.costo_con_iva, p.stock_minimo, p.activo,
          p.categoria_id, cp.nombre AS categoria_nombre,
          ${SUBQUERY_STOCK} AS stock,
          -- Alerta de reposición: solo cuando hay mínimo configurado (> 0) y el
@@ -23,9 +23,11 @@ const SELECT_BASE = `
   LEFT JOIN categorias_producto cp ON cp.id = p.categoria_id
 `
 
-// `texto` filtra por código (nro. de parte), código de barra, nombre o marca,
-// sin importar mayúsculas/minúsculas (LIKE ya es case-insensitive para ASCII
-// en SQLite). Escanear un código de barra encuentra el producto directo.
+// `texto` filtra por código (nro. de parte), código de barra, nombre, marca,
+// ubicación, categoría o descripción (aquí van los nombres coloquiales: "goma"
+// encuentra el "buje"), sin importar mayúsculas/minúsculas (LIKE ya es
+// case-insensitive para ASCII en SQLite). Escanear un código de barra
+// encuentra el producto directo.
 export function listar({ incluirInactivos = false, texto } = {}) {
   const condiciones = []
   const params = []
@@ -33,10 +35,10 @@ export function listar({ incluirInactivos = false, texto } = {}) {
   const busqueda = (texto || '').trim()
   if (busqueda) {
     condiciones.push(
-      '(p.codigo LIKE ? OR p.codigo_barras LIKE ? OR p.nombre LIKE ? OR p.marca LIKE ? OR p.ubicacion LIKE ? OR cp.nombre LIKE ?)'
+      '(p.codigo LIKE ? OR p.codigo_barras LIKE ? OR p.nombre LIKE ? OR p.marca LIKE ? OR p.ubicacion LIKE ? OR cp.nombre LIKE ? OR p.descripcion LIKE ?)'
     )
     const patron = `%${busqueda}%`
-    params.push(patron, patron, patron, patron, patron, patron)
+    params.push(patron, patron, patron, patron, patron, patron, patron)
   }
   const where = condiciones.length ? `WHERE ${condiciones.join(' AND ')}` : ''
   return getDb().prepare(`${SELECT_BASE} ${where} ORDER BY p.nombre`).all(...params)
@@ -67,8 +69,18 @@ export function contarPorCategoria(categoriaId) {
   return getDb().prepare('SELECT COUNT(*) AS n FROM productos WHERE categoria_id = ?').get(categoriaId).n
 }
 
-export function actualizarPrecioCompra(id, precioCompraUsd) {
-  getDb().prepare('UPDATE productos SET precio_compra_usd = ? WHERE id = ?').run(precioCompraUsd, id)
+// El flag `costoConIva` viaja junto al costo: declara si ese precio de
+// compra ya incluía el IVA (1) o no (0). Con costo null (sin costo) el
+// flag queda en 0 — sin costo no hay IVA que desglosar.
+export function actualizarPrecioCompra(id, precioCompraUsd, costoConIva = 0) {
+  getDb()
+    .prepare('UPDATE productos SET precio_compra_usd = ?, costo_con_iva = ? WHERE id = ?')
+    .run(precioCompraUsd, precioCompraUsd == null ? 0 : (costoConIva ? 1 : 0), id)
+}
+
+// Solo el flag, cuando el costo no cambia (edición del producto).
+export function actualizarCostoConIva(id, costoConIva) {
+  getDb().prepare('UPDATE productos SET costo_con_iva = ? WHERE id = ?').run(costoConIva ? 1 : 0, id)
 }
 
 export function tieneVentas(id) {

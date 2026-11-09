@@ -2,7 +2,7 @@ import * as preciosRepo from '../repositories/precios.repo.js'
 import * as tiposPrecioRepo from '../repositories/tiposPrecio.repo.js'
 import * as productosRepo from '../repositories/productos.repo.js'
 import * as tasasRepo from '../repositories/tasas.repo.js'
-import { calcularPrecios, redondear2 } from './precios.calculo.js'
+import { redondear2 } from './precios.calculo.js'
 import { normalizarMargenes } from './precios.validation.js'
 
 // Los precios se calculan del costo × margen y se materializan al registrar
@@ -13,10 +13,11 @@ export function listarPrecios(opciones) {
   return preciosRepo.listar(opciones)
 }
 
-// Todos los tipos de precio activos del producto con su margen efectivo y el
-// precio calculado en las tres monedas con la tasa vigente:
-//   [{ id, tipoPrecioId, tipoPrecioNombre, tipoPrecioOrden, margen,
-//      margenOrigen: 'propio'|'default', precioUsd, precioBs, precioUsdt }]
+// Todos los tipos activos del producto con su único margen efectivo. Se
+// conserva el equivalente USDT en el contrato interno por compatibilidad.
+//   [{ id, tipoPrecioId, tipoPrecioNombre, tipoPrecioOrden, margen, margenUsdt,
+//      margenOrigen, margenUsdtOrigen: 'propio'|'default',
+//      precioUsd, precioBs, precioUsdt }]
 // `id` es el id de la fila en precios (null si el producto todavía no tiene
 // precio materializado para ese tipo). Sin tasa vigente, Bs/USDT van en null.
 export function listarPreciosPorProducto(productoId) {
@@ -40,9 +41,12 @@ export function listarPreciosPorProducto(productoId) {
       fila.precio_id = preciosRepo.upsertPrecio(productoId, {
         tipoPrecioId: fila.tipo_precio_id,
         margen: fila.margen ?? null,
-        valorUsd
+        margenUsdt: fila.margen ?? null,
+        valorUsd,
+        valorUsdt: valorUsd
       })
       fila.valor_usd = valorUsd
+      fila.valor_usdt = valorUsd
     }
   }
 
@@ -55,10 +59,10 @@ export function listarPreciosPorProducto(productoId) {
   }))
 }
 
-// Resuelve el margen efectivo y los tres montos de una fila
-// producto×tipo. Si existe la fila, valor_usd es el materializado
-// autoritativo; si no, se calcula al vuelo con el margen efectivo
-// (producto sin entrada aún). Sin tasa vigente, Bs/USDT van en null.
+// Resuelve los márgenes efectivos y los tres montos de una fila
+// producto×tipo. Solo valor_usd es autoritativo; valor_usdt/margen_usdt se
+// mantienen en la BD para compatibilidad sin modificar inventarios existentes.
+// Sin tasa vigente, Bs/USDT van en null.
 function calcularFila(fila, costo, tasa) {
   const propio = fila.margen != null
   const margen = propio ? fila.margen : fila.margen_default
@@ -72,12 +76,23 @@ function calcularFila(fila, costo, tasa) {
   }
   let precioBs = null
   let precioUsdt = null
-  if (precioUsd != null && tasa) {
-    const calculado = calcularPrecios(precioUsd, 0, tasa.valor_bcv, tasa.valor_usdt)
-    precioBs = calculado.precioBs
-    precioUsdt = calculado.precioUsdt
+  if (tasa) {
+    const bcv = Number(tasa.valor_bcv)
+    const usdt = Number(tasa.valor_usdt)
+    if (precioUsd != null && bcv > 0) precioBs = redondear2(precioUsd * bcv)
+    if (precioUsd != null && bcv > 0 && usdt > 0) {
+      precioUsdt = redondear2(redondear2(precioUsd * bcv) / usdt)
+    }
   }
-  return { margen, margenOrigen: propio ? 'propio' : 'default', precioUsd, precioBs, precioUsdt }
+  return {
+    margen,
+    margenUsdt: margen,
+    margenOrigen: propio ? 'propio' : 'default',
+    margenUsdtOrigen: propio ? 'propio' : 'default',
+    precioUsd,
+    precioBs,
+    precioUsdt
+  }
 }
 
 // Todos los productos × tipos activos con sus precios calculados, en una
@@ -96,17 +111,16 @@ export function listarPreciosCatalogo() {
   }))
 }
 
-// Aplica la tabla de márgenes a un producto dentro de la transacción de quien
-// llama (entrada de mercancía o edición de producto). Por cada tipo ACTIVO se
-// guarda margen propio = el enviado, o el margen_default del tipo si no vino,
-// y se materializa valor_usd = round2(costo × (1 + margen/100)).
+// Aplica el margen único a cada tipo activo dentro de la transacción de
+// entrada o edición. Las columnas legadas se sincronizan al editar, sin
+// recorrer ni reescribir productos anteriores.
 //
-// Si `costoUsd` es null (producto sin costo registrado) solo se actualiza el
-// margen de las filas existentes: no se pueden materializar precios sin costo.
-// Las filas de tipos inactivos quedan desactivadas.
+// Si `costoUsd` es null (producto sin costo registrado) solo se actualizan
+// los márgenes de las filas existentes: no se pueden materializar precios
+// sin costo. Las filas de tipos inactivos quedan desactivadas.
 export function aplicarMargenesDeProducto(productoId, costoUsd, margenesRaw) {
   const margenes = normalizarMargenes(margenesRaw) ?? []
-  const enviados = new Map(margenes.map((m) => [m.tipoPrecioId, m.margen]))
+  const enviados = new Map(margenes.map((m) => [m.tipoPrecioId, m]))
 
   const tipos = tiposPrecioRepo.listarActivos()
   const activos = new Set(tipos.map((t) => t.id))
@@ -121,18 +135,43 @@ export function aplicarMargenesDeProducto(productoId, costoUsd, margenesRaw) {
   const filaPorTipo = new Map(conPrecio.map((f) => [f.tipo_precio_id, f]))
 
   for (const tipo of tipos) {
-    const margen = enviados.has(tipo.id) ? enviados.get(tipo.id) : tipo.margen_default
+    const enviado = enviados.get(tipo.id)
+    const margen = enviado ? enviado.margen : tipo.margen_default
     if (costoUsd != null) {
+      const valorUsd = redondear2(costoUsd * (1 + margen / 100))
       preciosRepo.upsertPrecio(productoId, {
         tipoPrecioId: tipo.id,
         margen,
-        valorUsd: redondear2(costoUsd * (1 + margen / 100))
+        margenUsdt: margen,
+        valorUsd,
+        valorUsdt: valorUsd
       })
     } else if (filaPorTipo.has(tipo.id)) {
-      preciosRepo.actualizarMargen(productoId, tipo.id, margen)
+      preciosRepo.actualizarMargen(productoId, tipo.id, margen, margen)
     }
   }
   preciosRepo.desactivarDeTiposInactivos(productoId)
+}
+
+// Recalcula valor_usd/valor_usdt materializados con el costo vigente y los
+// márgenes YA guardados en `precios` (no toca margen ni margen_usdt). Se usa
+// cuando el costo cambia sin que el usuario re-edite márgenes — p. ej. al
+// anular la entrada que definía el costo. Con costo null no hay base nueva:
+// las filas conservan su último valor materializado (igual que
+// aplicarMargenesDeProducto, que tampoco materializa sin costo).
+export function rematerializarPrecios(productoId, costoUsd) {
+  if (costoUsd == null) return
+  const filas = preciosRepo.listarTiposConMargen(productoId)
+  for (const fila of filas) {
+    if (fila.precio_id == null) continue
+    const margen = fila.margen ?? fila.margen_default
+    const valorUsd = redondear2(costoUsd * (1 + margen / 100))
+    preciosRepo.actualizarValores(
+      fila.precio_id,
+      valorUsd,
+      valorUsd
+    )
+  }
 }
 
 export function listarTiposPrecio() {

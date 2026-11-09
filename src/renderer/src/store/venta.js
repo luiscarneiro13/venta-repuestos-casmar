@@ -6,19 +6,25 @@ import { reactive } from 'vue'
 // state local del componente se perdería al volver.
 //
 // Cada línea es un producto; el precio se asigna explícitamente después.
-// metodoPago es uno solo para toda la venta: 'bs' (bolívares a tasa BCV)
-// o 'usdt' (equivalente del total en Bs a tasa Binance).
-// tipoDocumento: 'factura' (con IVA) o 'nota_entrega' (igual, pero sin IVA).
+// Las ventas nuevas siempre se registran en Bs; no hay método de pago en el
+// estado del ticket para evitar conservar una selección USDT anterior.
+// tipoDocumento: 'factura' (desglosa IVA) o 'nota_entrega' (nunca lo
+// desglosa). La nota permite elegir su moneda ('usd' | 'bs') y siempre
+// usa el precio final con IVA embebido.
 export const ventaState = reactive({
   carrito: [],
   clienteSeleccionadoId: null,
   productoActivoId: null,
-  metodoPago: 'bs',
-  tipoDocumento: 'factura'
+  tipoDocumento: 'factura',
+  notaMoneda: 'usd'
 })
 
 export function setTipoDocumento(tipo) {
   if (tipo === 'factura' || tipo === 'nota_entrega') ventaState.tipoDocumento = tipo
+}
+
+export function setNotaMoneda(moneda) {
+  if (moneda === 'usd' || moneda === 'bs') ventaState.notaMoneda = moneda
 }
 
 export function agregarProducto(productoId) {
@@ -33,10 +39,6 @@ export function asignarPrecio(productoId, precioId) {
   if (item) item.precioId = precioId
 }
 
-export function setMetodoPago(metodo) {
-  if (metodo === 'bs' || metodo === 'usdt') ventaState.metodoPago = metodo
-}
-
 // Recalcula en vivo mientras se escribe: acepta 0 de forma transitoria
 // (el subtotal de la línea se ve en 0) sin quitar el producto todavía.
 export function setCantidad(productoId, valor) {
@@ -44,6 +46,15 @@ export function setCantidad(productoId, valor) {
   if (!item) return
   const v = parseInt(valor, 10)
   item.cantidad = Number.isNaN(v) || v < 0 ? 0 : v
+}
+
+export function ajustarCantidadAlStock(productoId, stock) {
+  const disponible = Math.max(0, Math.floor(Number(stock) || 0))
+  if (disponible === 0) {
+    quitarDelCarrito(productoId)
+  } else {
+    setCantidad(productoId, disponible)
+  }
 }
 
 export function quitarDelCarrito(productoId) {
@@ -72,6 +83,6 @@ export function limpiarTicket() {
   limpiarCarrito()
   ventaState.clienteSeleccionadoId = null
   ventaState.productoActivoId = null
-  ventaState.metodoPago = 'bs'
   ventaState.tipoDocumento = 'factura'
+  ventaState.notaMoneda = 'usd'
 }

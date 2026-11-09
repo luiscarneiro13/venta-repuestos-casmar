@@ -67,3 +67,72 @@ test('la búsqueda encuentra el producto por su código de barra', () => {
   const porNombre = listarProductos({ texto: 'Filtro' })
   assert.equal(porNombre.length, 1)
 })
+
+test('al editar el precio de compra se actualiza el costo y se rematerializan los precios', async () => {
+  const db = base()
+  const { registrarEntrada } = await import('../src/main/services/inventario.service.js')
+  const { listarPreciosPorProducto } = await import('../src/main/services/precios.service.js')
+  const { registrarTasa } = await import('../src/main/services/tasas.service.js')
+  const usuarioId = db.prepare("SELECT id FROM usuarios WHERE usuario = 'admin'").get().id
+  registrarTasa({ valorBcv: 100, valorUsdt: 120, usuarioId })
+
+  const p = crearProducto({ codigo: 'PC-1', nombre: 'Con costo editable' })
+  const proveedorId = db.prepare("INSERT INTO proveedores (nombre) VALUES ('Prov')").run().lastInsertRowid
+  registrarEntrada({ productoId: p.id, cantidad: 10, proveedorId, precioCompraUsd: 10, usuarioId, margenes: [] })
+
+  // Costo de la entrada: 10 → precio materializado 20 (margen 100% del tipo).
+  let precio = listarPreciosPorProducto(p.id).find((x) => x.tipoPrecioNombre === 'Precio Full')
+  assert.equal(precio.precioUsd, 20)
+
+  // Corrección manual del costo desde la edición del producto.
+  const actualizado = actualizarProducto(p.id, {
+    codigo: 'PC-1', nombre: 'Con costo editable', precioCompraUsd: 15
+  })
+  assert.equal(actualizado.precio_compra_usd, 15)
+  precio = listarPreciosPorProducto(p.id).find((x) => x.tipoPrecioNombre === 'Precio Full')
+  assert.equal(precio.precioUsd, 30, 'el precio se recalcula con el costo corregido')
+})
+
+test('el flag costo con IVA se edita con el producto y se conserva si no se envía', async () => {
+  const db = base()
+  const { registrarEntrada } = await import('../src/main/services/inventario.service.js')
+  const usuarioId = db.prepare("SELECT id FROM usuarios WHERE usuario = 'admin'").get().id
+  const p = crearProducto({ codigo: 'PC-IVA', nombre: 'Con IVA' })
+  const proveedorId = db.prepare("INSERT INTO proveedores (nombre) VALUES ('Prov IVA')").run().lastInsertRowid
+  registrarEntrada({ productoId: p.id, cantidad: 10, proveedorId, precioCompraUsd: 10, usuarioId, margenes: [], costoConIva: true })
+  const flag = () => db.prepare('SELECT costo_con_iva FROM productos WHERE id = ?').get(p.id).costo_con_iva
+  assert.equal(flag(), 1)
+
+  // Corregir solo el costo (sin enviar el flag) NO lo pisa.
+  actualizarProducto(p.id, { codigo: 'PC-IVA', nombre: 'Con IVA', precioCompraUsd: 12 })
+  assert.equal(flag(), 1)
+  // Editar solo el flag, sin costo.
+  actualizarProducto(p.id, { codigo: 'PC-IVA', nombre: 'Con IVA', costoConIva: false })
+  assert.equal(flag(), 0)
+  actualizarProducto(p.id, { codigo: 'PC-IVA', nombre: 'Con IVA', precioCompraUsd: 12, costoConIva: true })
+  assert.equal(flag(), 1)
+  // Quitar el costo deja el flag en 0.
+  actualizarProducto(p.id, { codigo: 'PC-IVA', nombre: 'Con IVA', precioCompraUsd: null })
+  assert.equal(flag(), 0)
+})
+
+test('el precio de compra debe ser mayor que cero o vacío; sin él no se toca el costo', () => {
+  const db = base()
+  const p = crearProducto({ codigo: 'PC-2', nombre: 'Costo inválido' })
+  db.prepare('UPDATE productos SET precio_compra_usd = 7.5 WHERE id = ?').run(p.id)
+
+  assert.throws(
+    () => actualizarProducto(p.id, { codigo: 'PC-2', nombre: 'Costo inválido', precioCompraUsd: 0 }),
+    /mayor que cero/
+  )
+  assert.throws(
+    () => actualizarProducto(p.id, { codigo: 'PC-2', nombre: 'Costo inválido', precioCompraUsd: -3 }),
+    /mayor que cero/
+  )
+
+  // Vacío quita el costo; no enviarlo lo deja como estaba.
+  const sinCosto = actualizarProducto(p.id, { codigo: 'PC-2', nombre: 'Costo inválido', precioCompraUsd: null })
+  assert.equal(sinCosto.precio_compra_usd, null)
+  const sinCampo = actualizarProducto(p.id, { codigo: 'PC-2', nombre: 'Costo inválido' })
+  assert.equal(sinCampo.precio_compra_usd, null)
+})

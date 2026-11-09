@@ -29,7 +29,7 @@
         :sub="`· ${ventasActivas.length} ventas`"
       />
       <KpiCard lbl="Tasa BCV (USD)" :val="formatMontoBs(tasasDelDia.bcv)" sub="Bs por dólar · hoy" />
-      <KpiCard lbl="Tasa Binance (USDT)" :val="formatMontoBs(tasasDelDia.usdt)" sub="Bs por USDT · hoy" />
+      <KpiCard lbl="Tasa USDT" :val="formatMontoBs(tasasDelDia.usdt)" sub="Bs por USDT · hoy" />
       <KpiCard lbl="Unidades" :val="String(unidadesHoy)" sub="Vendidas hoy" />
     </div>
 
@@ -44,7 +44,6 @@
             <th>Unidades</th>
             <th>Total USD</th>
             <th>Total Bs</th>
-            <th>Pago</th>
             <th>Tasa aplicada</th>
             <th>Fecha/hora</th>
             <th>Estado</th>
@@ -64,11 +63,6 @@
             <td class="num">{{ v.cantidad_unidades }}</td>
             <td class="num">{{ formatUsd(v.total_usd) }}</td>
             <td class="num muted">{{ formatMontoBs(v.total_bs) }}</td>
-            <td>
-              <span class="tag" :class="v.metodo_pago === 'usdt' ? 'tag-pendiente' : 'tag-activa'">
-                {{ v.metodo_pago === 'usdt' ? 'USDT · Divisas' : 'Bolívares' }}
-              </span>
-            </td>
             <td class="num muted">
               {{ tasaMostrada(v).toLocaleString('es-VE', { minimumFractionDigits: 2 }) }} Bs
             </td>
@@ -87,7 +81,7 @@
             </td>
           </tr>
           <tr v-if="!cargando && ventas.length === 0">
-            <td colspan="12" class="muted">Todavía no hay ventas registradas hoy.</td>
+            <td colspan="11" class="muted">Todavía no hay ventas registradas hoy.</td>
           </tr>
         </tbody>
       </table>
@@ -105,12 +99,22 @@
           <div class="line muted"><span></span><span>{{ formatMontoBs(modalCierre.resumen.totales.contadoBs) }}</span></div>
         </div>
         <div class="login-field" style="margin-top: 14px">
-          <label class="field-label">Tasa de cierre BCV (Bs por USD)</label>
-          <input v-model.number="modalCierre.tasaCierre" class="input num" type="number" step="0.01" />
+          <label class="field-label" for="cierre-tasa-bcv">Tasa de cierre BCV (Bs por USD)</label>
+          <input
+            id="cierre-tasa-bcv"
+            :value="modalCierre.tasaCierre" class="input num"
+            inputmode="numeric" placeholder="0,00"
+            @keydown="bloquearNoDigitos" @input="onTasaCierreInput('bcv', $event)"
+          />
         </div>
         <div class="login-field">
-          <label class="field-label">Tasa de cierre USDT (Bs por USDT)</label>
-          <input v-model.number="modalCierre.tasaCierreUsdt" class="input num" type="number" step="0.01" />
+          <label class="field-label" for="cierre-tasa-usdt">Tasa de cierre USDT (Bs por USDT)</label>
+          <input
+            id="cierre-tasa-usdt"
+            :value="modalCierre.tasaCierreUsdt" class="input num"
+            inputmode="numeric" placeholder="0,00"
+            @keydown="bloquearNoDigitos" @input="onTasaCierreInput('usdt', $event)"
+          />
         </div>
         <p class="muted" style="font-size: 11px">Esta acción no se puede deshacer.</p>
       </template>
@@ -138,16 +142,12 @@
     </BaseModal>
 
     <BaseModal v-if="modalVer.abierto" :title="`Venta ${modalVer.venta?.numero_ticket}`" @close="modalVer.abierto = false">
-      <p v-if="modalVer.errorImpresion" class="warning-box">No se pudo imprimir el ticket: {{ modalVer.errorImpresion }}</p>
+      <p v-if="modalVer.errorImpresion" class="warning-box">No se pudo imprimir la factura: {{ modalVer.errorImpresion }}</p>
       <p v-if="modalVer.cargando" class="muted">Cargando…</p>
       <div v-else-if="modalVer.venta" class="ticket">
         <div class="line"><span>Cliente</span><span>{{ modalVer.venta.cliente_nombre || 'Sin cliente' }}</span></div>
         <div class="line"><span>Atendido por</span><span>{{ modalVer.venta.usuario_nombre || '—' }}</span></div>
         <div class="line"><span>Tasa BCV (USD)</span><span>{{ formatMontoBs(tasaBcvMostrada(modalVer.venta)) }}</span></div>
-        <div class="line"><span>Tasa Binance (USDT)</span><span>{{ formatMontoBs(tasaUsdtMostrada(modalVer.venta)) }}</span></div>
-        <div v-if="modalVer.venta.metodo_pago" class="line">
-          <span>Método de pago</span><span>{{ modalVer.venta.metodo_pago === 'usdt' ? 'USDT · Divisas' : 'Bolívares (Bs)' }}</span>
-        </div>
         <div class="line">
           <span>Documento</span><span>{{ etiquetaDocumento(modalVer.venta) }}</span>
         </div>
@@ -184,11 +184,17 @@
         </template>
         <div class="line" style="font-weight: 600"><span>Total</span><span>{{ formatUsd(modalVer.venta.total_usd) }}</span></div>
         <div class="line muted"><span>Total en bolívares</span><span>{{ formatMontoBs(modalVer.venta.total_bs) }}</span></div>
-        <div v-if="modalVer.venta.metodo_pago === 'usdt'" class="line muted">
-          <span>Total USDT</span><span>{{ formatMontoUsdt(modalVer.venta.total_usdt) }}</span>
-        </div>
       </div>
       <template #footer>
+        <div v-if="modalVer.venta && modalVer.venta.estado === 'activa'" class="copias-fila" style="margin-right: auto">
+          <span class="muted" style="font-size: 11.5px">Copias:</span>
+          <label class="copia-opcion" :class="{ activa: modalVer.copias === 1 }">
+            <input type="radio" :value="1" v-model.number="modalVer.copias" :disabled="modalVer.imprimiendo" /> 1
+          </label>
+          <label class="copia-opcion" :class="{ activa: modalVer.copias === 2 }">
+            <input type="radio" :value="2" v-model.number="modalVer.copias" :disabled="modalVer.imprimiendo" /> 2
+          </label>
+        </div>
         <button class="btn btn-outline" type="button" @click="modalVer.abierto = false">Cerrar</button>
         <button
           v-if="modalVer.venta && modalVer.venta.estado === 'activa'"
@@ -237,7 +243,8 @@ import BaseModal from '../components/BaseModal.vue'
 import ConfirmModal from '../components/ConfirmModal.vue'
 import KpiCard from '../components/KpiCard.vue'
 import StatusTag from '../components/StatusTag.vue'
-import { formatUsd, formatMontoBs, formatMontoUsdt, formatFechaHoraUtc } from '../composables/useFormato'
+import { formatUsd, formatMontoBs, formatFechaHoraUtc } from '../composables/useFormato'
+import { aplicarMascaraTasa, bloquearNoDigitos, mascaraTasaDesdeNumero } from '../composables/useMascaras'
 import { exportarCsv } from '../composables/useExportarCsv'
 import { session, marcarCajaCerrada } from '../store/session'
 
@@ -287,7 +294,6 @@ function tasaMostrada(v) {
 
 // Ambas tasas congeladas en la venta (para mostrarlas juntas en el detalle).
 const tasaBcvMostrada = (v) => v.tasa_bcv ?? v.tasa_valor ?? 0
-const tasaUsdtMostrada = (v) => v.tasa_usdt ?? v.tasa_valor ?? 0
 
 const ventasActivas = computed(() => ventas.value.filter((v) => v.estado === 'activa'))
 const totalContadoUsd = computed(() => ventasActivas.value.reduce((s, v) => s + v.total_usd, 0))
@@ -295,7 +301,7 @@ const totalContadoBs = computed(() => ventasActivas.value.reduce((s, v) => s + v
 
 // Anular devuelve stock y saca la venta de los totales: solo administradores.
 const puedeAnular = computed(() => puedeHacer('ventas.anular'))
-const modalVer = reactive({ abierto: false, cargando: false, venta: null, imprimiendo: false, errorImpresion: '' })
+const modalVer = reactive({ abierto: false, cargando: false, venta: null, imprimiendo: false, errorImpresion: '', copias: 1 })
 // Subtotal sin IVA = suma de las líneas guardadas (igual que la factura).
 const sumaItems = (campo) =>
   Math.round((modalVer.venta?.items ?? []).reduce((s, i) => s + (Number(i[campo]) || 0), 0) * 100) / 100
@@ -304,6 +310,7 @@ async function verVenta(venta) {
   modalVer.abierto = true
   modalVer.cargando = true
   modalVer.venta = null
+  modalVer.copias = 1
   modalVer.errorImpresion = ''
   try {
     modalVer.venta = await window.api.ventas.detalle(venta.id)
@@ -315,19 +322,20 @@ async function verVenta(venta) {
   }
 }
 
-// Reimprime los 2 tickets de una venta ya registrada (ej. cuando falló la
-// impresora al vender y se corrigió el fallo después).
+// Reimprime el documento de una venta ya registrada (ej. cuando falló la
+// impresora al vender y se corrigió el fallo después). El usuario elige si
+// quiere 1 copia (solo ORIGINAL) o 2 (ORIGINAL + COPIA de tienda).
 async function reimprimirVenta() {
   if (!modalVer.venta) return
   modalVer.imprimiendo = true
   modalVer.errorImpresion = ''
   try {
-    const resultado = await window.api.impresora.imprimirVenta(modalVer.venta.id)
+    const resultado = await window.api.impresora.imprimirVenta(modalVer.venta.id, modalVer.copias)
     if (!resultado.ok) {
       modalVer.errorImpresion = resultado.error || 'Error desconocido'
     }
   } catch (e) {
-    modalVer.errorImpresion = e.message || 'No se pudo imprimir el ticket'
+    modalVer.errorImpresion = e.message || 'No se pudo imprimir la factura'
   } finally {
     modalVer.imprimiendo = false
   }
@@ -404,8 +412,8 @@ async function abrirCierre() {
   modalCierre.error = ''
   modalCierre.errorImpresion = ''
   modalCierre.cajaCerrada = null
-  modalCierre.tasaCierre = session.tasa
-  modalCierre.tasaCierreUsdt = session.tasaUsdt
+  modalCierre.tasaCierre = mascaraTasaDesdeNumero(session.tasa).texto
+  modalCierre.tasaCierreUsdt = mascaraTasaDesdeNumero(session.tasaUsdt).texto
   try {
     modalCierre.resumen = await window.api.caja.resumenCierre(caja.id)
   } catch (e) {
@@ -419,17 +427,30 @@ function cerrarModalCierre() {
   modalCierre.abierto = false
 }
 
+// Tasas de cierre con la misma máscara de monto de las tasas del día:
+// solo dígitos, los dos últimos son los decimales ("18732" → "187,32").
+function onTasaCierreInput(cual, event) {
+  const { texto } = aplicarMascaraTasa(event.target.value)
+  if (cual === 'bcv') modalCierre.tasaCierre = texto
+  else modalCierre.tasaCierreUsdt = texto
+  event.target.value = texto
+}
+
+const valorTasaCierre = (display) => Number(String(display ?? '').replace(',', '.'))
+
 async function confirmarCierre() {
   const caja = cajaObjetivo.value
   if (!caja) return
 
   modalCierre.error = ''
   modalCierre.errorImpresion = ''
-  if (!modalCierre.tasaCierre || modalCierre.tasaCierre <= 0) {
+  const tasaBcv = valorTasaCierre(modalCierre.tasaCierre)
+  const tasaUsdt = valorTasaCierre(modalCierre.tasaCierreUsdt)
+  if (!Number.isFinite(tasaBcv) || tasaBcv <= 0) {
     modalCierre.error = 'La tasa de cierre BCV debe ser mayor a 0'
     return
   }
-  if (!modalCierre.tasaCierreUsdt || modalCierre.tasaCierreUsdt <= 0) {
+  if (!Number.isFinite(tasaUsdt) || tasaUsdt <= 0) {
     modalCierre.error = 'La tasa de cierre USDT debe ser mayor a 0'
     return
   }
@@ -439,8 +460,8 @@ async function confirmarCierre() {
     await window.api.caja.cerrar({
       cajaId: caja.id,
       usuarioCierreId: session.usuario.id,
-      tasaCierre: modalCierre.tasaCierre,
-      tasaCierreUsdt: modalCierre.tasaCierreUsdt
+      tasaCierre: tasaBcv,
+      tasaCierreUsdt: tasaUsdt
     })
     marcarCajaCerrada(caja.id)
     modalCierre.cajaCerrada = caja
@@ -477,7 +498,7 @@ const ETIQUETA_ESTADO = { activa: 'Activa', anulada: 'Anulada' }
 const etiquetaDocumento = (v) => (v?.tipo_documento === 'nota_entrega' ? 'Nota de entrega' : 'Factura')
 
 function exportarExcel() {
-  const encabezados = ['Ticket', 'Documento', 'Cliente', 'Usuario', 'Unidades', 'Total USD', 'Total Bs', 'IVA Bs', 'Pago', 'Tasa BCV (USD)', 'Tasa Binance (USDT)', 'Fecha/hora', 'Estado']
+  const encabezados = ['Ticket', 'Documento', 'Cliente', 'Usuario', 'Unidades', 'Total USD', 'Total Bs', 'IVA Bs', 'Tasa BCV (USD)', 'Fecha/hora', 'Estado']
   const filas = ventas.value.map((v) => [
     v.numero_ticket,
     etiquetaDocumento(v),
@@ -487,9 +508,7 @@ function exportarExcel() {
     v.total_usd.toFixed(2),
     v.total_bs.toFixed(2),
     Number(v.iva_bs || 0).toFixed(2),
-    v.metodo_pago === 'usdt' ? 'USDT · Divisas' : 'Bolívares',
     tasaBcvMostrada(v).toFixed(2),
-    tasaUsdtMostrada(v).toFixed(2),
     formatFechaHoraUtc(v.creado_en),
     ETIQUETA_ESTADO[v.estado] || v.estado
   ])
@@ -498,7 +517,6 @@ function exportarExcel() {
   filas.push([])
   filas.push(['', '', 'Totales hoy:', String(unidadesHoy.value)])
   filas.push(['', '', 'Tasa BCV (USD) del día:', Number(tasasDelDia.bcv || 0).toFixed(2)])
-  filas.push(['', '', 'Tasa Binance (USDT) del día:', Number(tasasDelDia.usdt || 0).toFixed(2)])
 
   const fecha = new Date().toISOString().slice(0, 10)
   exportarCsv(`ventas-del-dia-${fecha}.csv`, encabezados, filas)
@@ -508,3 +526,33 @@ onMounted(cargarVentasDeHoy)
 alCambiar(['ventas', 'caja', 'tasas'], () => cargarVentasDeHoy().catch(() => {}))
 
 </script>
+
+<style scoped>
+.copias-fila {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.copia-opcion {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.copia-opcion.activa {
+  border-color: var(--primary);
+  background: var(--primary-soft, #eef4ff);
+  font-weight: 600;
+}
+
+.copia-opcion input {
+  accent-color: var(--primary);
+  margin: 0;
+}
+</style>

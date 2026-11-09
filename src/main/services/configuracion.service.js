@@ -16,3 +16,30 @@ export function guardarIva(porcentaje) {
   configuracionRepo.guardar('iva_porcentaje', String(numero))
   return numero
 }
+
+// Datos fiscales del negocio: se imprimen en el encabezado de las facturas,
+// notas de entrega y reportes en hoja carta. Todos opcionales; si están
+// vacíos el documento solo lleva el logo.
+const CLAVES_NEGOCIO = {
+  nombre: 'negocio_nombre',
+  rif: 'negocio_rif',
+  direccion: 'negocio_direccion',
+  telefono: 'negocio_telefono'
+}
+
+export function obtenerNegocio() {
+  return {
+    nombre: configuracionRepo.obtener(CLAVES_NEGOCIO.nombre) || '',
+    rif: configuracionRepo.obtener(CLAVES_NEGOCIO.rif) || '',
+    direccion: configuracionRepo.obtener(CLAVES_NEGOCIO.direccion) || '',
+    telefono: configuracionRepo.obtener(CLAVES_NEGOCIO.telefono) || ''
+  }
+}
+
+export function guardarNegocio(datos = {}) {
+  for (const campo of Object.keys(CLAVES_NEGOCIO)) {
+    const valor = String(datos[campo] ?? '').trim()
+    configuracionRepo.guardar(CLAVES_NEGOCIO[campo], valor || null)
+  }
+  return obtenerNegocio()
+}

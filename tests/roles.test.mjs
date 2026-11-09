@@ -157,7 +157,7 @@ test('todos los IPC que modifican productos, inventario, catálogo, usuarios o c
     'proveedores:crear', 'proveedores:actualizar', 'proveedores:desactivar', 'proveedores:reactivar',
     'inventario:registrarEntrada', 'inventario:registrarAjusteSalida', 'inventario:editarMovimiento',
     'usuarios:crear', 'usuarios:actualizar', 'usuarios:eliminar',
-    'configuracion:guardarIva', 'impresora:guardar', 'sistema:reiniciarBaseDatos', 'sistema:exportarBackup',
+    'configuracion:guardarIva', 'configuracion:guardarNegocio', 'impresora:guardar', 'sistema:reiniciarBaseDatos', 'sistema:exportarBackup',
     'ventas:anular', 'ventas:crear'
   ]
   for (const canal of deben) {
