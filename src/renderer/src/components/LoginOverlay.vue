@@ -10,6 +10,7 @@
       <div class="login-field">
         <label class="field-label">Usuario</label>
         <input
+          ref="usuarioRef"
           :value="usuarioTexto"
           class="input"
           type="text"
@@ -47,6 +48,7 @@ const router = useRouter()
 // constante podría no estar definida si no se procesa el define.
 const VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'
 
+const usuarioRef = ref(null)
 const usuarioTexto = ref('')
 const password = ref('')
 const error = ref('')
@@ -56,6 +58,7 @@ const cargando = ref(false)
 const modoEsclavo = ref('')
 
 onMounted(async () => {
+  usuarioRef.value?.focus()
   try {
     const cfg = await window.api?.appConfig?.obtener()
     if (cfg?.modo === 'cliente') modoEsclavo.value = `${cfg.servidor}:${cfg.puerto}`

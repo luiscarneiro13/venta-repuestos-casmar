@@ -158,15 +158,21 @@ Cada nueva consulta del backend requiere tocar las 4 capas:
   método de pago) y registra venta + salidas en una transacción. Anular devuelve stock.
 - **Tipo de documento** (`ventas.tipo_documento`, migración 023): `factura` (default)
   o `nota_entrega`. La factura imprime líneas sin IVA + `Subtotal / IVA / TOTAL` en Bs;
-  la nota **nunca desglosa IVA** (`iva_porcentaje` 0, `iva_*` 0). La única opción
-  propia de la nota en pantalla es la **moneda** del documento ($ o Bs,
-  `ventas.nota_moneda` 'usd'|'bs', migración 028); las notas nuevas siempre cobran
-  el precio con IVA embebido (`calcularLineaNota` con `conIva=true`, que equivale a
-  `precioUnitarioConIva` + IVA 0%) y se guardan con `nota_con_iva = 1`. La columna
-  `ventas.nota_con_iva` y el modo "sin IVA" (`precioUnitarioSinIva`) quedan solo
-  para reimprimir notas históricas creadas con esa opción.
-  Correlativos independientes: facturas `T-0001…`, notas `NE-0001…`. Store:
-  `tipoDocumento`, `notaMoneda` (se reinician con el ticket). El documento
+  la nota **nunca desglosa IVA** (`iva_porcentaje` 0, `iva_*` 0). Al seleccionar
+  «Nota de entrega» aparece un **panel de opciones en el carrito** (`.nota-opciones`
+  bajo el selector de documento) con dos decisiones congeladas en la venta
+  (`ventas.nota_moneda` 'usd'|'bs' y `ventas.nota_con_iva` 0|1, migración 028;
+  NULL en facturas; notas viejas = '$' con IVA):
+  - **Moneda**: el documento y la vista previa salen en $ o en Bs.
+  - **Sin IVA** (default): cobra la base sin impuesto (`precioUnitarioSinIva`: el
+    materializado si el costo era sin IVA, o `precio ÷ 1,16` si traía IVA).
+    Cards, buscador y carrito muestran esa base (prop `sinIva` en
+    `PriceCard`/`ProductoCombobox`).
+  - **Con IVA**: cobra el mismo precio con IVA que la factura, embebido
+    (`calcularLineaNota(..., conIva=true)` = `precioUnitarioConIva` + IVA 0%).
+  Correlativos independientes: facturas
+  `T-0001…`, notas `NE-0001…`. Store: `tipoDocumento`, `notaMoneda`,
+  `notaConIva` (se reinician con el ticket). El documento
   dice `NOTA DE ENTREGA` / `Nro. NE-…`, sin IVA, sin método de pago ni tasas, con el
   bloque de recepción fijo abajo a la izquierda: RECIBIDO / FECHA / FIRMA (`.recibo` +
   `pagina-nota`). Las facturas nuevas no imprimen tasas; la reimpresión lee
@@ -192,6 +198,9 @@ Cada nueva consulta del backend requiere tocar las 4 capas:
     compra ya trae IVA. **Ya no se edita desde la UI**: todos los campos de costo
     (entrada, edición de entrada y producto) piden el costo sin IVA y envían
     `costoConIva: false`; el flag queda solo para respetar filas históricas.
+    La tabla «Utilidad por tipo de precio» (`MargenesTabla`) muestra la **base
+    sin IVA** `costo×(1+margen)` — el precio guardado en `precios`; el IVA solo
+    se suma encima al cobrar (pantalla de venta, factura y nota con IVA).
     Si es 1, el precio materializado `costo×(1+margen)` **es** el precio con IVA:
     `calcularLinea(precio, q, iva, ivaIncluido)` lo desglosa hacia atrás
     (`unitario = r2(precio/(1+iva%))`, `ivaUnit = r2(precio − unitario)`); la factura

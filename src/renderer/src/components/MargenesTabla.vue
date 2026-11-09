@@ -48,6 +48,8 @@ import { computed } from 'vue'
 import { calcularPrecios, parseMargen } from '../composables/usePrecios'
 
 // Una fila por tipo activo: solo se edita el margen del precio vigente.
+// El precio mostrado es la base sin IVA (costo × (1+margen)); el impuesto
+// se suma después, en la venta.
 const props = defineProps({
   filas: { type: Array, required: true },
   costoUsd: { type: Number, default: null },

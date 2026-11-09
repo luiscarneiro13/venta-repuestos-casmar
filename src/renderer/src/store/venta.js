@@ -9,14 +9,16 @@ import { reactive } from 'vue'
 // Las ventas nuevas siempre se registran en Bs; no hay método de pago en el
 // estado del ticket para evitar conservar una selección USDT anterior.
 // tipoDocumento: 'factura' (desglosa IVA) o 'nota_entrega' (nunca lo
-// desglosa). La nota permite elegir su moneda ('usd' | 'bs') y siempre
-// usa el precio final con IVA embebido.
+// desglosa). La nota tiene dos opciones propias elegidas en un modal al
+// seleccionarla: notaMoneda ('usd' | 'bs', moneda del documento) y
+// notaConIva (true = cobra el precio con IVA embebido; false = la base).
 export const ventaState = reactive({
   carrito: [],
   clienteSeleccionadoId: null,
   productoActivoId: null,
   tipoDocumento: 'factura',
-  notaMoneda: 'usd'
+  notaMoneda: 'usd',
+  notaConIva: false
 })
 
 export function setTipoDocumento(tipo) {
@@ -25,6 +27,10 @@ export function setTipoDocumento(tipo) {
 
 export function setNotaMoneda(moneda) {
   if (moneda === 'usd' || moneda === 'bs') ventaState.notaMoneda = moneda
+}
+
+export function setNotaConIva(conIva) {
+  ventaState.notaConIva = Boolean(conIva)
 }
 
 export function agregarProducto(productoId) {
@@ -85,4 +91,5 @@ export function limpiarTicket() {
   ventaState.productoActivoId = null
   ventaState.tipoDocumento = 'factura'
   ventaState.notaMoneda = 'usd'
+  ventaState.notaConIva = false
 }

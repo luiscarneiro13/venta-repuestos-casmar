@@ -42,7 +42,7 @@
         :tasa-bcv="tasas.bcv"
       />
       <p class="muted" style="font-size: 11px; margin: 6px 0 0">
-        Precio $ = costo × (1 + % utilidad) · Precio Bs = precio $ × BCV.
+        Precio $ = costo sin IVA × (1 + % utilidad) · Precio Bs = precio $ × BCV.
       </p>
     </div>
 

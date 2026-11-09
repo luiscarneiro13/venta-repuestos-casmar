@@ -13,13 +13,13 @@
     <div v-else class="venta-layout">
       <div class="venta-ticket-col">
         <div class="card cart-panel">
-          <div class="login-field">
+          <div class="login-field" :class="{ 'campo-falta': faltaCliente }">
             <label class="field-label">Cliente *</label>
             <ClienteCombobox v-model="clienteSeleccionadoId" :clientes="clientes" @crear-cliente="abrirModalCliente" />
           </div>
-          <div class="login-field">
+          <div class="login-field" :class="{ 'campo-falta': faltaProducto }">
             <label class="field-label">Producto</label>
-            <ProductoCombobox ref="buscadorRef" :productos="productos" :iva-porcentaje="ivaConfigurado" limpiar-al-seleccionar @seleccionar="agregarProducto" />
+            <ProductoCombobox ref="buscadorRef" :productos="productos" :iva-porcentaje="ivaConfigurado" :sin-iva="mostrarSinIva" limpiar-al-seleccionar @seleccionar="agregarProducto" />
           </div>
 
           <div class="cart-title">
@@ -62,7 +62,7 @@
               <span class="num">{{ formatMontoBs(totales.iva.bs) }}</span>
             </div>
             <div class="row total">
-              <span>Pago en bolívares{{ ivaPorcentaje > 0 ? ' (IVA incluido)' : '' }}</span>
+              <span>Pago en bolívares{{ ivaPorcentaje > 0 ? ' (IVA incluido)' : esNota && !notaConIva ? ' (sin IVA)' : '' }}</span>
               <span class="num">
                 {{ formatMontoBs(totales.total.bs) }}
                 <small class="total-usd">{{ totales.total.usd == null ? '—' : formatUsd(totales.total.usd) }}</small>
@@ -93,17 +93,31 @@
                 </label>
               </div>
             </fieldset>
+            <fieldset class="nota-grupo">
+              <legend>Precio en el documento</legend>
+              <div class="nota-radios">
+                <label class="nota-radio" :class="{ activa: notaConIva }">
+                  <input type="radio" name="nota-iva" :value="true" :checked="notaConIva" @change="setNotaConIva(true)" />
+                  <span>Con IVA <small>(precio final)</small></span>
+                </label>
+                <label class="nota-radio" :class="{ activa: !notaConIva }">
+                  <input type="radio" name="nota-iva" :value="false" :checked="!notaConIva" @change="setNotaConIva(false)" />
+                  <span>Sin IVA <small>(precio base)</small></span>
+                </label>
+              </div>
+            </fieldset>
           </div>
 
           <p v-if="hayExcesoStock" class="warning-box">
             Hay productos con más unidades que el stock disponible. Ajusta las cantidades para continuar.
           </p>
           <p v-if="haySinPrecio" class="warning-box">Asigna un precio a cada producto antes de finalizar.</p>
-          <p v-if="errorVenta" class="warning-box">{{ errorVenta }}</p>
+          <p v-if="errorVenta || faltaCliente || faltaProducto" class="warning-box">
+            {{ errorVenta || 'Completa los campos marcados en rojo.' }}
+          </p>
 
           <button
             class="btn btn-primary finalizar-btn"
-            :disabled="carrito.length === 0 || !clienteSeleccionadoId || hayExcesoStock || haySinPrecio"
             @click="finalizarVenta"
           >
             Finalizar venta
@@ -137,6 +151,7 @@
               :precio="precio"
               :iva-porcentaje="ivaConfigurado"
               :iva-incluido="Number(productoActivo.costo_con_iva) === 1"
+              :sin-iva="mostrarSinIva"
               :selected="carrito.find((i) => i.productoId === productoActivoId)?.precioId === precio.id"
               @click="asignarPrecio(productoActivoId, precio.id)"
             />
@@ -301,7 +316,8 @@ import {
   ajustarCantidadAlStock,
   limpiarTicket,
   setTipoDocumento,
-  setNotaMoneda
+  setNotaMoneda,
+  setNotaConIva
 } from '../store/venta'
 
 const productos = ref([])
@@ -318,8 +334,10 @@ const buscadorRef = ref(null)
 // El ticket en curso (carrito, cliente, tipo de documento y producto
 // seleccionado) vive en un store de módulo (ventaState) para que no se
 // pierda al navegar a otra pantalla y volver a "Nueva venta".
-const { clienteSeleccionadoId, productoActivoId, tipoDocumento, notaMoneda } = toRefs(ventaState)
+const { clienteSeleccionadoId, productoActivoId, tipoDocumento, notaMoneda, notaConIva } = toRefs(ventaState)
 const esNota = computed(() => tipoDocumento.value === 'nota_entrega')
+// Nota "sin IVA": cards, buscador y carrito muestran la base sin impuesto.
+const mostrarSinIva = computed(() => esNota.value && !notaConIva.value)
 const carrito = ventaState.carrito
 
 async function asegurarPrecios(productoId, forzar = false) {
@@ -403,7 +421,7 @@ const carritoDetallado = computed(() =>
       const conIva = Number(producto.costo_con_iva) === 1
       const linea = precio
         ? esNota.value
-          ? calcularLineaNota(precio, item.cantidad, ivaConfigurado.value, conIva)
+          ? calcularLineaNota(precio, item.cantidad, ivaConfigurado.value, conIva, notaConIva.value)
           : calcularLinea(precio, item.cantidad, ivaConfigurado.value, conIva)
         : null
       return { ...item, producto, precio, linea, stock: producto.stock, excedeStock: item.cantidad > producto.stock }
@@ -516,6 +534,7 @@ const modalTicket = reactive({
   totalUsdt: 0,
   tipoDocumento: 'factura',
   notaMoneda: 'usd',
+  notaConIva: false,
   clienteNombre: '',
   copias: 2
 })
@@ -535,17 +554,23 @@ function mostrarErrorImpresion(mensaje) {
   modalErrorImpresion.abierto = true
 }
 
+// Campos obligatorios marcados tras un "Finalizar venta" incompleto: se
+// subrayan en rojo y tanto la marca como el aviso desaparecen solos al
+// rellenarlos (computed sobre el estado actual del campo).
+const faltan = reactive({ cliente: false, producto: false })
+const faltaCliente = computed(() => faltan.cliente && !clienteSeleccionadoId.value)
+const faltaProducto = computed(() => faltan.producto && (carrito.length === 0 || haySinPrecio.value))
+
 // "Finalizar venta" solo abre la vista previa: la venta NO se registra en BD
 // todavía. El snapshot de items alimenta el modal; si el usuario elige
 // "Corregir" el carrito sigue intacto y no queda nada guardado.
 async function finalizarVenta() {
   errorVenta.value = ''
-  if (carrito.length === 0 || haySinPrecio.value || hayExcesoStock.value) {
-    errorVenta.value = 'Revisa que todos los productos tengan precio y stock disponible.'
-    return
-  }
-  if (!clienteSeleccionadoId.value) {
-    errorVenta.value = 'Selecciona un cliente para registrar la venta.'
+  faltan.cliente = !clienteSeleccionadoId.value
+  faltan.producto = carrito.length === 0 || haySinPrecio.value
+  if (faltan.cliente || faltan.producto) return
+  if (hayExcesoStock.value) {
+    errorVenta.value = 'Hay productos con más unidades que el stock disponible.'
     return
   }
   // Antes de mostrar la factura se refrescan precios (tasas vigentes) e IVA
@@ -567,6 +592,7 @@ async function finalizarVenta() {
   modalTicket.imprimiendo = false
   modalTicket.tipoDocumento = tipoDocumento.value
   modalTicket.notaMoneda = notaMoneda.value
+  modalTicket.notaConIva = notaConIva.value
   modalTicket.items = carritoDetallado.value.map((item) => ({
     precioId: item.precioId,
     cantidad: item.cantidad,
@@ -615,7 +641,7 @@ async function imprimirYCerrar() {
           metodoPago: 'bs',
           tipoDocumento: modalTicket.tipoDocumento,
           notaMoneda: modalTicket.notaMoneda,
-          notaConIva: true,
+          notaConIva: modalTicket.notaConIva,
           items: carritoDetallado.value.map((item) => ({
             precioId: item.precioId,
             cantidad: item.cantidad
@@ -640,6 +666,8 @@ async function imprimirYCerrar() {
       }
       modalTicket.ventaId = venta.id
       modalTicket.numeroTicket = venta.numero_ticket
+      faltan.cliente = false
+      faltan.producto = false
       cargarCatalogo()
       // La venta ya quedó registrada, así que el carrito se vacía aunque la
       // impresión falle: el ticket se reimprime desde Ventas del día.
@@ -733,8 +761,18 @@ alCambiar('config', async () => {
   margin: 0;
 }
 
+/* Campo obligatorio sin rellenar tras "Finalizar venta": subrayado rojo
+   sobre el input del combobox hasta que el usuario lo completa. (--danger
+   del tema es gris oscuro, por eso el rojo es literal.) */
+.campo-falta :deep(input) {
+  border-bottom: 2px solid #d32f2f;
+}
+.campo-falta .field-label {
+  color: #d32f2f;
+}
+
 /* Opciones de la nota de entrega: panel anidado bajo el selector de
-   documento, con radios (moneda) y checkbox (IVA). */
+   documento, con radios para la moneda y el IVA. */
 .nota-opciones {
   margin-top: 8px;
   padding: 10px 12px;
